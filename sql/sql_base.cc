@@ -306,49 +306,6 @@ OPEN_TABLE_LIST *list_open_tables(THD *thd, const char *db, const char *wild)
 }
 
 
-/*
-  Close all tables which aren't in use by any thread
-
-  @param thd Thread context
-  @param tables List of tables to remove from the cache
-  @param wait_for_refresh Wait for a impending flush
-  @param timeout Timeout for waiting for flush to be completed.
-
-  @note THD can be NULL, but then wait_for_refresh must be FALSE
-        and tables must be NULL.
-
-  @note When called as part of FLUSH TABLES WITH READ LOCK this function
-        ignores metadata locks held by other threads. In order to avoid
-        situation when FLUSH TABLES WITH READ LOCK sneaks in at the moment
-        when some write-locked table is being reopened (by FLUSH TABLES or
-        ALTER TABLE) we have to rely on additional global shared metadata
-        lock taken by thread trying to obtain global read lock.
-*/
-
-
-struct close_cached_tables_arg
-{
-  tdc_version_t refresh_version;
-  TDC_element *element;
-};
-
-
-static my_bool close_cached_tables_callback(TDC_element *element,
-                                            close_cached_tables_arg *arg)
-{
-  mysql_mutex_lock(&element->LOCK_table_share);
-  if (element->share && element->flushed &&
-      element->version < arg->refresh_version)
-  {
-    /* wait_for_old_version() will unlock mutex and free share */
-    arg->element= element;
-    return TRUE;
-  }
-  mysql_mutex_unlock(&element->LOCK_table_share);
-  return FALSE;
-}
-
-
 /**
    Close all tables that are not in use in table definition cache
 
@@ -377,27 +334,38 @@ void purge_tables(bool purge_flag)
 }
 
 
+/**
+   close_cached_tables
+
+   This function has two separate usages:
+   1) Close not used tables in the table cache to free memory
+   2) Close a list of tables and wait until they are not used anymore. This
+      is used mainly when preparing a table for export.
+
+   If there are locked tables, they are closed and reopened before
+   function returns. This is done to not get a deadlock between two
+   flush tables with locked tables.
+*/
+
 bool close_cached_tables(THD *thd, TABLE_LIST *tables,
                          bool wait_for_refresh, ulong timeout)
 {
-  bool result= FALSE;
-  struct timespec abstime;
-  tdc_version_t refresh_version;
   DBUG_ENTER("close_cached_tables");
   DBUG_ASSERT(thd || (!wait_for_refresh && !tables));
 
-  refresh_version= tdc_increment_refresh_version();
-
   if (!tables)
-    purge_tables(true);
+  {
+    /* Free tables that are not used */
+    purge_tables(false);
+  }
   else
   {
     bool found=0;
     for (TABLE_LIST *table= tables; table; table= table->next_local)
     {
-      /* tdc_remove_table() also sets TABLE_SHARE::version to 0. */
-      found|= tdc_remove_table(thd, TDC_RT_REMOVE_UNUSED, table->db.str,
-                               table->table_name.str, TRUE);
+      found|= tdc_remove_table(thd, TDC_RT_REMOVE_UNUSED,
+                               table->db.str,
+                               table->table_name.str, TRUE, FALSE);
     }
     if (!found)
       wait_for_refresh=0;			// Nothing to wait for
@@ -407,8 +375,12 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
                       (int) tdc_records()));
 
   if (!wait_for_refresh)
-    DBUG_RETURN(result);
+    DBUG_RETURN(false);
 
+  /*
+    It's enough to check for locked_tables_mode here as if one has locked tables
+    than one can not flush any tables that was not handled above
+  */
   if (thd->locked_tables_mode)
   {
     /*
@@ -419,9 +391,10 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
     */
     TABLE_LIST *tables_to_reopen= (tables ? tables :
                                   thd->locked_tables_list.locked_tables());
+    bool result= false;
 
-    /* Close open HANDLER instances to avoid self-deadlock. */
-    mysql_ha_flush_tables(thd, tables_to_reopen);
+    /* close open HANDLER for this thread to allow table to be closed */
+    mysql_ha_flush_tables(thd, tables);
 
     for (TABLE_LIST *table_list= tables_to_reopen; table_list;
          table_list= table_list->next_global)
@@ -438,61 +411,13 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
       if (wait_while_table_is_used(thd, table,
                                    HA_EXTRA_PREPARE_FOR_FORCED_CLOSE))
       {
-        result= TRUE;
-        goto err_with_reopen;
+        result= true;
+        break;
       }
+      /* Force table to be removed from table cache */
+      table->s->tdc->flushed= true;
       close_all_tables_for_name(thd, table->s, HA_EXTRA_NOT_USED, NULL);
     }
-  }
-
-  /* Wait until all threads have closed all the tables we are flushing. */
-  DBUG_PRINT("info", ("Waiting for other threads to close their open tables"));
-
-  /*
-    To a self-deadlock or deadlocks with other FLUSH threads
-    waiting on our open HANDLERs, we have to flush them.
-  */
-  mysql_ha_flush(thd);
-  DEBUG_SYNC(thd, "after_flush_unlock");
-
-  if (!tables)
-  {
-    int r= 0;
-    close_cached_tables_arg argument;
-    argument.refresh_version= refresh_version;
-    set_timespec(abstime, timeout);
-
-    while (!thd->killed &&
-           (r= tdc_iterate(thd,
-                           (my_hash_walk_action) close_cached_tables_callback,
-                           &argument)) == 1 &&
-           !argument.element->share->wait_for_old_version(thd, &abstime,
-                                    MDL_wait_for_subgraph::DEADLOCK_WEIGHT_DDL))
-      /* no-op */;
-
-    if (r)
-      result= TRUE;
-  }
-  else
-  {
-    for (TABLE_LIST *table= tables; table; table= table->next_local)
-    {
-      if (thd->killed)
-        break;
-      if (tdc_wait_for_old_version(thd, table->db.str, table->table_name.str,
-                                   timeout,
-                                   MDL_wait_for_subgraph::DEADLOCK_WEIGHT_DDL,
-                                   refresh_version))
-      {
-        result= TRUE;
-        break;
-      }
-    }
-  }
-
-err_with_reopen:
-  if (thd->locked_tables_mode)
-  {
     /*
       No other thread has the locked tables open; reopen them and get the
       old locks. This should always succeed (unless some external process
@@ -508,8 +433,42 @@ err_with_reopen:
     */
     for (TABLE *tab= thd->open_tables; tab; tab= tab->next)
       tab->mdl_ticket->downgrade_lock(MDL_SHARED_NO_READ_WRITE);
+
+    DBUG_RETURN(result);
   }
-  DBUG_RETURN(result);
+  else if (tables)
+  {
+    /*
+      Get an explicit MDL lock for all requested tables to ensure they are
+      not used by any other thread
+    */
+    MDL_request_list mdl_requests;
+
+    DBUG_PRINT("info", ("Waiting for other threads to close their open tables"));
+    DEBUG_SYNC(thd, "after_flush_unlock");
+
+    /* close open HANDLER for this thread to allow table to be closed */
+    mysql_ha_flush_tables(thd, tables);
+
+    for (TABLE_LIST *table= tables; table; table= table->next_local)
+    {
+      MDL_request *mdl_request= new (thd->mem_root) MDL_request;
+      if (mdl_request == NULL)
+        DBUG_RETURN(true);
+      mdl_request->init(&table->mdl_request.key, MDL_EXCLUSIVE, MDL_STATEMENT);
+      mdl_requests.push_front(mdl_request);
+    }
+
+    if (thd->mdl_context.acquire_locks(&mdl_requests, timeout))
+      DBUG_RETURN(true);
+
+    /*
+      Free not used shares. Needed to ensure that above tables will be
+      reopened, which is required by some mysql-test-run tests
+    */
+    tdc_purge(true);
+  }
+  DBUG_RETURN(false);
 }
 
 
@@ -827,7 +786,7 @@ close_all_tables_for_name(THD *thd, TABLE_SHARE *share,
   {
     /* Remove the table share from the cache. */
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db, table_name,
-                     FALSE);
+                     FALSE, TRUE);
   }
 }
 
@@ -1388,7 +1347,7 @@ bool wait_while_table_is_used(THD *thd, TABLE *table,
 
   tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN,
                    table->s->db.str, table->s->table_name.str,
-                   FALSE);
+                   FALSE, TRUE);
   /* extra() call must come only after all instances above are closed */
   if (function != HA_EXTRA_NOT_USED)
     (void) table->file->extra(function);
@@ -1430,7 +1389,7 @@ void drop_open_table(THD *thd, TABLE *table, const LEX_CSTRING *db_name,
     close_thread_table(thd, &thd->open_tables);
     /* Remove the table share from the table cache. */
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db_name->str, table_name->str,
-                     FALSE);
+                     FALSE, TRUE);
     /* Remove the table from the storage engine and rm the .frm. */
     quick_rm_table(thd, table_type, db_name, table_name, 0);
  }
@@ -2994,7 +2953,7 @@ static bool auto_repair_table(THD *thd, TABLE_LIST *table_list)
   /* Remove the repaired share from the table cache. */
   tdc_remove_table(thd, TDC_RT_REMOVE_ALL,
                    table_list->db.str, table_list->table_name.str,
-                   FALSE);
+                   FALSE, TRUE);
 end_free:
   my_free(entry);
   return result;
@@ -3166,7 +3125,7 @@ Open_table_context::recover_from_failed_open()
           break;
 
         tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
-                         m_failed_table->table_name.str, FALSE);
+                         m_failed_table->table_name.str, FALSE, TRUE);
 
         m_thd->get_stmt_da()->clear_warning_info(m_thd->query_id);
         m_thd->clear_error();                 // Clear error message
@@ -3202,7 +3161,7 @@ Open_table_context::recover_from_failed_open()
           break;
 
         tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
-                         m_failed_table->table_name.str, FALSE);
+                         m_failed_table->table_name.str, FALSE, TRUE);
 
         result= auto_repair_table(m_thd, m_failed_table);
         /*
