@@ -1,0 +1,107 @@
+--source include/have_innodb.inc
+--source include/have_metadata_lock_info.inc
+
+--echo #
+--echo # testing LOCKs BACKUP STAGE
+--echo #
+
+--echo #
+--echo # testing if BACKUP STAGE FLUSH causes deadlocks with ALTER TABLE
+--echo #
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+connection default;
+create table t1 (a int) engine=innodb;
+
+start transaction;
+# Acquires MDL lock
+insert into t1 values (1);
+
+connection con1;
+# Waits on MDL
+--send alter table t1 add column (j int)
+
+connection con2;
+backup stage start;
+backup stage flush;
+--error ER_STATEMENT_TIMEOUT
+SET STATEMENT max_statement_time=1 FOR backup stage block_ddl;
+SELECT LOCK_MODE, LOCK_TYPE, TABLE_SCHEMA, TABLE_NAME FROM information_schema.metadata_lock_info;
+--send backup stage block_ddl
+
+connection default;
+commit;
+
+--error ER_STATEMENT_TIMEOUT
+SET STATEMENT max_statement_time=1 FOR SELECT * FROM t1;
+--send SELECT * FROM t1
+connection con2;
+--reap # BLOCK_DDL
+backup stage end;
+connection con1;
+--reap  # ALTER TABLE
+connection default;
+--reap  # SELECT
+disconnect con1;
+disconnect con2;
+drop table t1;
+
+--echo #
+--echo # testing if BACKUP STAGE FLUSH causes deadlocks with DROP TABLE
+--echo #
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+connection default;
+create table t1 (a int) engine=innodb;
+
+start transaction;
+# Acquires MDL lock
+insert into t1 values (1);
+
+connection con1;
+# Waits on MDL
+--error ER_STATEMENT_TIMEOUT
+SET STATEMENT max_statement_time=1 FOR DROP TABLE t1;
+--send DROP TABLE t1;
+
+connection con2;
+backup stage start;
+backup stage flush;
+--error ER_STATEMENT_TIMEOUT
+SET STATEMENT max_statement_time=1 FOR SELECT * FROM t1;
+
+--error ER_STATEMENT_TIMEOUT
+SET STATEMENT max_statement_time=1 FOR backup stage block_ddl;
+SELECT LOCK_MODE, LOCK_TYPE, TABLE_SCHEMA, TABLE_NAME FROM information_schema.metadata_lock_info;
+backup stage end;
+select user,db,Info from information_schema.processlist where user <> "system user" order by Info;
+
+connection default;
+commit;
+connection con1;
+--reap  # DROP TABLE
+connection default;
+
+--echo # Check if backup stage block_dll + concurrent drop table blocks select
+create table t1 (a int) engine=innodb;
+backup stage start;
+backup stage block_ddl;
+connection con1;
+--send DROP TABLE t1
+connection con2;
+let $wait_condition=
+    select count(*) = 1 from information_schema.processlist
+    where state = "Waiting for backup lock";
+--source include/wait_condition.inc
+connection con2;
+SELECT LOCK_MODE, LOCK_TYPE, TABLE_SCHEMA, TABLE_NAME FROM information_schema.metadata_lock_info;
+SET STATEMENT max_statement_time=1 FOR SELECT * FROM t1;
+connection default;
+backup stage end;
+connection con1;
+--reap
+connection default;
+disconnect con1;
+disconnect con2;

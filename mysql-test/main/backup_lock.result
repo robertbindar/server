@@ -1,0 +1,96 @@
+#
+# testing LOCKs BACKUP STAGE
+#
+#
+# testing if BACKUP STAGE FLUSH causes deadlocks with ALTER TABLE
+#
+connect  con1,localhost,root,,;
+connect  con2,localhost,root,,;
+connection default;
+create table t1 (a int) engine=innodb;
+start transaction;
+insert into t1 values (1);
+connection con1;
+alter table t1 add column (j int);
+connection con2;
+backup stage start;
+backup stage flush;
+SET STATEMENT max_statement_time=1 FOR backup stage block_ddl;
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+SELECT LOCK_MODE, LOCK_TYPE, TABLE_SCHEMA, TABLE_NAME FROM information_schema.metadata_lock_info;
+LOCK_MODE	LOCK_TYPE	TABLE_SCHEMA	TABLE_NAME
+MDL_BACKUP_DDL	Backup lock		
+MDL_BACKUP_FLUSH	Backup lock		
+MDL_SHARED_WRITE	Table metadata lock	test	t1
+MDL_SHARED_UPGRADABLE	Table metadata lock	test	t1
+MDL_INTENTION_EXCLUSIVE	Schema metadata lock	test	
+backup stage block_ddl;
+connection default;
+commit;
+SET STATEMENT max_statement_time=1 FOR SELECT * FROM t1;
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+SELECT * FROM t1;
+connection con2;
+backup stage end;
+connection con1;
+connection default;
+a	j
+1	NULL
+disconnect con1;
+disconnect con2;
+drop table t1;
+#
+# testing if BACKUP STAGE FLUSH causes deadlocks with DROP TABLE
+#
+connect  con1,localhost,root,,;
+connect  con2,localhost,root,,;
+connection default;
+create table t1 (a int) engine=innodb;
+start transaction;
+insert into t1 values (1);
+connection con1;
+SET STATEMENT max_statement_time=1 FOR DROP TABLE t1;
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+DROP TABLE t1;;
+connection con2;
+backup stage start;
+backup stage flush;
+SET STATEMENT max_statement_time=1 FOR SELECT * FROM t1;
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+SET STATEMENT max_statement_time=1 FOR backup stage block_ddl;
+ERROR 70100: Query execution was interrupted (max_statement_time exceeded)
+SELECT LOCK_MODE, LOCK_TYPE, TABLE_SCHEMA, TABLE_NAME FROM information_schema.metadata_lock_info;
+LOCK_MODE	LOCK_TYPE	TABLE_SCHEMA	TABLE_NAME
+MDL_BACKUP_DDL	Backup lock		
+MDL_BACKUP_FLUSH	Backup lock		
+MDL_SHARED_WRITE	Table metadata lock	test	t1
+MDL_INTENTION_EXCLUSIVE	Schema metadata lock	test	
+backup stage end;
+select user,db,Info from information_schema.processlist where user <> "system user" order by Info;
+user	db	Info
+root	test	NULL
+root	test	DROP TABLE t1
+root	test	select user,db,Info from information_schema.processlist where user <> "system user" order by Info
+connection default;
+commit;
+connection con1;
+connection default;
+# Check if backup stage block_dll + concurrent drop table blocks select
+create table t1 (a int) engine=innodb;
+backup stage start;
+backup stage block_ddl;
+connection con1;
+DROP TABLE t1;
+connection con2;
+connection con2;
+SELECT LOCK_MODE, LOCK_TYPE, TABLE_SCHEMA, TABLE_NAME FROM information_schema.metadata_lock_info;
+LOCK_MODE	LOCK_TYPE	TABLE_SCHEMA	TABLE_NAME
+MDL_BACKUP_WAIT_DDL	Backup lock		
+SET STATEMENT max_statement_time=1 FOR SELECT * FROM t1;
+a
+connection default;
+backup stage end;
+connection con1;
+connection default;
+disconnect con1;
+disconnect con2;

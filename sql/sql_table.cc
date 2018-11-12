@@ -7519,6 +7519,10 @@ static bool mysql_inplace_alter_table(THD *thd,
     goto rollback;
   }
 
+  /* Don't downgrade lock for instant operations */
+  if (inplace_supported != HA_ALTER_INPLACE_COPY_NO_LOCK)
+    backup_set_alter_copy_lock(thd, table);
+
   /*
     Downgrade the lock if storage engine has told us that exclusive lock was
     necessary only for prepare phase (unless we are not under LOCK TABLES) and
@@ -7558,6 +7562,11 @@ static bool mysql_inplace_alter_table(THD *thd,
   // Upgrade to EXCLUSIVE before commit.
   if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
     goto rollback;
+
+  /* Set MDL_BACKUP_DDL */
+  if (inplace_supported != HA_ALTER_INPLACE_COPY_NO_LOCK)
+    if (backup_reset_alter_copy_lock(thd))
+      goto rollback;
 
   /*
     If we are killed after this point, we should ignore and continue.
@@ -9203,7 +9212,7 @@ bool mysql_alter_table(THD *thd, const LEX_CSTRING *new_db,
       */
       DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::BACKUP,
                                                  "", "",
-                                                 MDL_BACKUP_STMT));
+                                                 MDL_BACKUP_DDL));
 
       if (thd->mdl_context.acquire_locks(&mdl_requests,
                                          thd->variables.lock_wait_timeout))
@@ -10244,6 +10253,8 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
     DBUG_RETURN(-1);
   }
 
+  backup_set_alter_copy_lock(thd, from);
+
   alter_table_manage_keys(to, from->file->indexes_are_disabled(), keys_onoff);
 
   from->default_column_bitmaps();
@@ -10524,6 +10535,9 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
 
   cleanup_done= 1;
   to->file->extra(HA_EXTRA_NO_IGNORE_DUP_KEY);
+
+  if (backup_reset_alter_copy_lock(thd))
+    error= 1;
 
   if (unlikely(mysql_trans_commit_alter_copy_data(thd)))
     error= 1;
