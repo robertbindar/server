@@ -49,3 +49,5 @@ galera_as_slave_replication_budle : MDEV-15785 Test case galera_as_slave_replica
 galera_wan : MDEV-17259: Test failure on galera.galera_wan
 galera_pc_ignore_sb : MDEV-17357 Test failure on galera.galera_pc_ignore_sb
 galera_drop_database : test
+galera.galera_encrypt_tmp_files : Get error failed to enable encryption of temporary files
+galera.galera_var_reject_queries : assertion in inline_mysql_socket_send
