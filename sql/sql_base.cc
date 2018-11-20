@@ -365,7 +365,7 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
     {
       found|= tdc_remove_table(thd, TDC_RT_REMOVE_UNUSED,
                                table->db.str,
-                               table->table_name.str, TRUE, FALSE);
+                               table->table_name.str, TRUE);
     }
     if (!found)
       wait_for_refresh=0;			// Nothing to wait for
@@ -786,7 +786,7 @@ close_all_tables_for_name(THD *thd, TABLE_SHARE *share,
   {
     /* Remove the table share from the cache. */
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db, table_name,
-                     FALSE, TRUE);
+                     FALSE);
   }
 }
 
@@ -1347,7 +1347,7 @@ bool wait_while_table_is_used(THD *thd, TABLE *table,
 
   tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN,
                    table->s->db.str, table->s->table_name.str,
-                   FALSE, TRUE);
+                   FALSE);
   /* extra() call must come only after all instances above are closed */
   if (function != HA_EXTRA_NOT_USED)
     (void) table->file->extra(function);
@@ -1389,7 +1389,7 @@ void drop_open_table(THD *thd, TABLE *table, const LEX_CSTRING *db_name,
     close_thread_table(thd, &thd->open_tables);
     /* Remove the table share from the table cache. */
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL, db_name->str, table_name->str,
-                     FALSE, TRUE);
+                     FALSE);
     /* Remove the table from the storage engine and rm the .frm. */
     quick_rm_table(thd, table_type, db_name, table_name, 0);
  }
@@ -2953,7 +2953,7 @@ static bool auto_repair_table(THD *thd, TABLE_LIST *table_list)
   /* Remove the repaired share from the table cache. */
   tdc_remove_table(thd, TDC_RT_REMOVE_ALL,
                    table_list->db.str, table_list->table_name.str,
-                   FALSE, TRUE);
+                   FALSE);
 end_free:
   my_free(entry);
   return result;
@@ -3125,7 +3125,7 @@ Open_table_context::recover_from_failed_open()
           break;
 
         tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
-                         m_failed_table->table_name.str, FALSE, TRUE);
+                         m_failed_table->table_name.str, FALSE);
 
         m_thd->get_stmt_da()->clear_warning_info(m_thd->query_id);
         m_thd->clear_error();                 // Clear error message
@@ -3161,7 +3161,7 @@ Open_table_context::recover_from_failed_open()
           break;
 
         tdc_remove_table(m_thd, TDC_RT_REMOVE_ALL, m_failed_table->db.str,
-                         m_failed_table->table_name.str, FALSE, TRUE);
+                         m_failed_table->table_name.str, FALSE);
 
         result= auto_repair_table(m_thd, m_failed_table);
         /*
