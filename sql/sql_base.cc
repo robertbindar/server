@@ -343,8 +343,8 @@ void purge_tables(bool purge_flag)
       is used mainly when preparing a table for export.
 
    If there are locked tables, they are closed and reopened before
-   function returns. This is done to not get a deadlock between two
-   flush tables with locked tables.
+   function returns. This is done to ensure that table files will be closed
+   by all threads and thus external copyable when FLUSH TABLES returns.
 */
 
 bool close_cached_tables(THD *thd, TABLE_LIST *tables,
@@ -352,35 +352,19 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
 {
   DBUG_ENTER("close_cached_tables");
   DBUG_ASSERT(thd || (!wait_for_refresh && !tables));
+  DBUG_ASSERT(wait_for_refresh || !tables);
 
   if (!tables)
   {
     /* Free tables that are not used */
     purge_tables(false);
-  }
-  else
-  {
-    bool found=0;
-    for (TABLE_LIST *table= tables; table; table= table->next_local)
-    {
-      found|= tdc_remove_table(thd, TDC_RT_REMOVE_UNUSED,
-                               table->db.str,
-                               table->table_name.str, TRUE);
-    }
-    if (!found)
-      wait_for_refresh=0;			// Nothing to wait for
+    if (!wait_for_refresh)
+      DBUG_RETURN(false);
   }
 
   DBUG_PRINT("info", ("open table definitions: %d",
                       (int) tdc_records()));
 
-  if (!wait_for_refresh)
-    DBUG_RETURN(false);
-
-  /*
-    It's enough to check for locked_tables_mode here as if one has locked tables
-    than one can not flush any tables that was not handled above
-  */
   if (thd->locked_tables_mode)
   {
     /*
@@ -394,7 +378,7 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
     bool result= false;
 
     /* close open HANDLER for this thread to allow table to be closed */
-    mysql_ha_flush_tables(thd, tables);
+    mysql_ha_flush_tables(thd, tables_to_reopen);
 
     for (TABLE_LIST *table_list= tables_to_reopen; table_list;
          table_list= table_list->next_global)
@@ -408,14 +392,13 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
       if (! table)
         continue;
 
-      if (wait_while_table_is_used(thd, table,
-                                   HA_EXTRA_PREPARE_FOR_FORCED_CLOSE))
+      if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket, MDL_EXCLUSIVE,
+                                               timeout))
       {
         result= true;
         break;
       }
-      /* Force table to be removed from table cache */
-      table->s->tdc->flushed= true;
+      table->file->extra(HA_EXTRA_PREPARE_FOR_FORCED_CLOSE);
       close_all_tables_for_name(thd, table->s, HA_EXTRA_NOT_USED, NULL);
     }
     /*
@@ -462,11 +445,9 @@ bool close_cached_tables(THD *thd, TABLE_LIST *tables,
     if (thd->mdl_context.acquire_locks(&mdl_requests, timeout))
       DBUG_RETURN(true);
 
-    /*
-      Free not used shares. Needed to ensure that above tables will be
-      reopened, which is required by some mysql-test-run tests
-    */
-    tdc_purge(true);
+    for (TABLE_LIST *table= tables; table; table= table->next_local)
+      tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table->db.str,
+                       table->table_name.str, false);
   }
   DBUG_RETURN(false);
 }
@@ -662,9 +643,12 @@ bool close_cached_connection_tables(THD *thd, LEX_CSTRING *connection)
                   &argument))
     DBUG_RETURN(true);
 
-  DBUG_RETURN(argument.tables ?
-              close_cached_tables(thd, argument.tables, FALSE, LONG_TIMEOUT) :
-              false);
+  for (TABLE_LIST *table= argument.tables; table; table= table->next_local)
+      tdc_remove_table(thd, TDC_RT_REMOVE_UNUSED,
+                       table->db.str,
+                       table->table_name.str, TRUE);
+
+  DBUG_RETURN(argument.tables);
 }
 
 

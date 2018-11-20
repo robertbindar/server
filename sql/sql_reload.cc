@@ -336,6 +336,7 @@ bool reload_acl_and_cache(THD *thd, unsigned long long options,
           removed from table definition cache.
         */
         options|= REFRESH_FAST;
+        tables= 0;
       }
 #endif
       if (close_cached_tables(thd, tables,
