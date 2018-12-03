@@ -134,6 +134,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -181,6 +182,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -228,6 +230,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 #
 # Add GRANT OPTION db_datadict.* to testuser1;
 GRANT UPDATE ON db_datadict.* TO 'testuser1'@'localhost' WITH GRANT OPTION;
@@ -299,6 +302,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -346,6 +350,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -393,6 +398,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 connect  testuser1, localhost, testuser1, , db_datadict;
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -450,6 +456,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -497,6 +504,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -544,6 +552,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT USAGE ON *.* TO 'testuser1'@'localhost'
@@ -623,6 +632,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -670,6 +680,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -717,6 +728,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 GRANT SELECT ON *.* TO 'testuser1'@'localhost' WITH GRANT OPTION;
 #
 # Here <SELECT YES> is shown correctly for testuser1;
@@ -788,6 +800,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -835,6 +848,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -882,6 +896,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 connection testuser1;
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -939,6 +954,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -986,6 +1002,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -1033,6 +1050,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT SELECT ON *.* TO 'testuser1'@'localhost' WITH GRANT OPTION
@@ -1142,6 +1160,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -1189,6 +1208,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -1236,6 +1256,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 connection testuser1;
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -1340,6 +1361,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -1387,6 +1409,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -1434,6 +1457,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 connection testuser1;
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -1491,6 +1515,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -1538,6 +1563,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -1585,6 +1611,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT USAGE ON *.* TO 'testuser1'@'localhost'
@@ -1649,6 +1676,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -1696,6 +1724,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -1743,6 +1772,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT USAGE ON *.* TO 'testuser1'@'localhost'
@@ -1822,6 +1852,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser2
 Password	
@@ -1869,6 +1900,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 Host	localhost
 User	testuser3
 Password	
@@ -1916,6 +1948,7 @@ password_expired	N
 is_role	N
 default_role	
 max_statement_time	0.000000
+is_locked	N
 connection testuser1;
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''

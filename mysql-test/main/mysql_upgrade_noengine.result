@@ -140,7 +140,7 @@ Warnings:
 Level	Warning
 Code	1286
 Message	Unknown storage engine 'ARCHIVE'
-alter table mysql.user drop column default_role, drop column max_statement_time;
+alter table mysql.user drop column default_role, drop column max_statement_time, drop column is_locked;
 Phase 1/7: Checking and upgrading mysql database
 Processing databases
 mysql
@@ -228,7 +228,7 @@ Warnings:
 Level	Warning
 Code	1286
 Message	Unknown storage engine 'ARCHIVE'
-alter table mysql.user drop column default_role, drop column max_statement_time;
+alter table mysql.user drop column default_role, drop column max_statement_time, drop column is_locked;
 Phase 1/7: Checking and upgrading mysql database
 Processing databases
 mysql
