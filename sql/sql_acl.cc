@@ -10333,6 +10333,15 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
   DBUG_RETURN(result);
 }
 
+int mysql_lock_user(THD* thd, LEX_USER *user)
+{
+    DBUG_ENTER("mysql_lock_user");
+
+    printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
+    //DBUG_PRINT("error",("############: '%s'", "lock user acl fn"));
+
+    DBUG_RETURN(TRUE);
+}
 
 static bool
 mysql_revoke_sp_privs(THD *thd,

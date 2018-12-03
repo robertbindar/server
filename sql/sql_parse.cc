@@ -5220,6 +5220,27 @@ end_with_restore_list:
       my_ok(thd);
     }
     break;
+  case SQLCOM_LOCK_USER:
+  {
+    // TODO: implement lock user policies
+
+    //if (check_access(thd, UPDATE_ACL, "mysql", NULL, NULL, 1, 1) &&
+        //check_global_access(thd,CREATE_USER_ACL))
+      //break;
+
+
+    WSREP_TO_ISOLATION_BEGIN(WSREP_MYSQL_DB, NULL, NULL);
+
+    LEX_USER *user= get_current_user(thd, lex->grant_user);
+
+    mysql_lock_user(thd, user);
+
+    printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
+
+    my_ok(thd);
+
+    break;
+  }
   case SQLCOM_CREATE_DB:
   {
     if (prepare_db_action(thd, lex->create_info.or_replace() ?
