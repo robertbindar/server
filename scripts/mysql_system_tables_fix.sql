@@ -647,6 +647,9 @@ ALTER TABLE user ADD max_statement_time decimal(12,6) DEFAULT 0 NOT NULL;
 ALTER TABLE user MODIFY password_expired ENUM('N', 'Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL;
 ALTER TABLE user MODIFY is_role enum('N', 'Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL;
 
+ALTER TABLE user ADD is_locked enum('N', 'Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL AFTER max_statement_time;
+ALTER TABLE user MODIFY is_locked enum('N', 'Y') COLLATE utf8_general_ci DEFAULT 'N' NOT NULL;
+
 -- Need to pre-fill mysql.proxies_priv with access for root even when upgrading from
 -- older versions
 
