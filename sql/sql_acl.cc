@@ -877,6 +877,8 @@ class User_table: public Grant_table_base
   { return get_field(start_privilege_column + num_privileges() + 12); }
   Field* max_statement_time() const
   { return get_field(start_privilege_column + num_privileges() + 13); }
+  Field* is_locked() const
+  { return get_field(start_privilege_column + num_privileges() + 14); }
 
   /*
     Check if a user entry in the user table is marked as being a role entry
@@ -10335,12 +10337,74 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
 
 int mysql_lock_user(THD* thd, LEX_USER *user)
 {
-    DBUG_ENTER("mysql_lock_user");
+  // TODO: make checks for user permissions to lock other users
+  DBUG_ENTER("mysql_lock_user");
 
-    printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
-    //DBUG_PRINT("error",("############: '%s'", "lock user acl fn"));
+  printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
+  //DBUG_PRINT("error",("############: '%s'", "lock user acl fn"));
 
-    DBUG_RETURN(TRUE);
+  Grant_tables tables(Table_user, TL_WRITE);
+  char user_key[MAX_KEY_LENGTH];
+  int result= 1;
+  int error;
+  const char *host= user->host.str;
+  const char *username= user->user.str;
+
+  if ((result= tables.open_and_lock(thd)))
+    DBUG_RETURN(result != 1);
+
+  const User_table& user_table= tables.user_table();
+  TABLE *table= user_table.table();
+
+  mysql_mutex_lock(&acl_cache->lock);
+  // TODO: update acl_user is_locked
+  ACL_USER *acl_user;
+  if (!(acl_user= find_user_exact(host, username)))
+  {
+    mysql_mutex_unlock(&acl_cache->lock);
+    my_message(ER_PASSWORD_NO_MATCH, ER_THD(thd, ER_PASSWORD_NO_MATCH), MYF(0));
+    goto end;
+  }
+
+  tables.user_table().table()->use_all_columns();
+
+  user_table.host()->store(host,(uint) strlen(host), system_charset_info);
+  user_table.user()->store(username,(uint) strlen(username),
+                           system_charset_info);
+
+  key_copy((uchar *) user_key, table->record[0], table->key_info,
+           table->key_info->key_length);
+
+  if (table->file->ha_index_read_idx_map(table->record[0], 0,
+                                         (uchar *) user_key, HA_WHOLE_KEY,
+                                         HA_READ_KEY_EXACT))
+  {
+    mysql_mutex_unlock(&acl_cache->lock);
+    my_message(ER_PASSWORD_NO_MATCH, ER_THD(thd, ER_PASSWORD_NO_MATCH),
+               MYF(0));
+    goto end;
+  }
+
+  user_table.is_locked()->store("Y", 1, system_charset_info);
+
+  store_record(table, record[1]);
+
+  if (unlikely(error= table->file->ha_update_row(table->record[1],
+                                                 table->record[0])) &&
+      error != HA_ERR_RECORD_IS_THE_SAME)
+  {
+    mysql_mutex_unlock(&acl_cache->lock);
+    table->file->print_error(error, MYF(0)); /* purecov: deadcode */
+    goto end;
+  }
+
+  acl_cache->clear(1);
+  mysql_mutex_unlock(&acl_cache->lock);
+
+  end:
+    close_mysql_tables(thd);
+
+  DBUG_RETURN(TRUE);
 }
 
 static bool
