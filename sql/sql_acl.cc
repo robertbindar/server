@@ -151,6 +151,7 @@ public:
   LEX_CSTRING auth_string;
   LEX_CSTRING default_rolename;
   LEX_CSTRING salt;
+  bool is_locked;
 
   ACL_USER *copy(MEM_ROOT *root)
   {
@@ -1774,6 +1775,7 @@ static bool acl_load(THD *thd, const Grant_tables& tables)
     char *username= safe_str(get_field(&acl_memroot, user_table.user()));
     user.user.str= username;
     user.user.length= strlen(username);
+    user.is_locked = get_YN_as_bool(user_table.is_locked());
 
     /*
        If the user entry is a role, skip password and hostname checks
@@ -10337,11 +10339,10 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
 
 int mysql_lock_user(THD* thd, LEX_USER *user)
 {
-  // TODO: make checks for user permissions to lock other users
+  // TODObindar: make checks for user permissions to lock other users
   DBUG_ENTER("mysql_lock_user");
 
   printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
-  //DBUG_PRINT("error",("############: '%s'", "lock user acl fn"));
 
   Grant_tables tables(Table_user, TL_WRITE);
   char user_key[MAX_KEY_LENGTH];
@@ -10357,7 +10358,7 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
   TABLE *table= user_table.table();
 
   mysql_mutex_lock(&acl_cache->lock);
-  // TODO: update acl_user is_locked
+
   ACL_USER *acl_user;
   if (!(acl_user= find_user_exact(host, username)))
   {
@@ -10365,6 +10366,8 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
     my_message(ER_PASSWORD_NO_MATCH, ER_THD(thd, ER_PASSWORD_NO_MATCH), MYF(0));
     goto end;
   }
+
+  acl_user->is_locked = TRUE;
 
   tables.user_table().table()->use_all_columns();
 
@@ -13240,6 +13243,19 @@ bool acl_authenticate(THD *thd, uint com_change_user_pkt_len)
       errors.m_ssl= 1;
       inc_host_errors(mpvio.auth_info.thd->security_ctx->ip, &errors);
       login_failed_error(thd);
+      DBUG_RETURN(1);
+    }
+
+    // TODO:bindar add check for lock_user
+    if (acl_user->is_locked) {
+      status_var_increment(denied_connections);
+
+      my_error(ER_ACCESS_DENIED_ERROR, MYF(0),
+          acl_user->user.str,
+          acl_user->host.hostname,
+          ER_THD(thd, ER_YES));
+
+      //my_error(ER_LOCKED_ACCOUNT, MYF(0));
       DBUG_RETURN(1);
     }
 
