@@ -3822,6 +3822,7 @@ SHOW_VAR com_status_vars[]= {
   {"truncate",             STMT_STATUS(SQLCOM_TRUNCATE)},
   {"uninstall_plugin",     STMT_STATUS(SQLCOM_UNINSTALL_PLUGIN)},
   {"unlock_tables",        STMT_STATUS(SQLCOM_UNLOCK_TABLES)},
+  {"unlock_user",          STMT_STATUS(SQLCOM_UNLOCK_USER)},
   {"update",               STMT_STATUS(SQLCOM_UPDATE)},
   {"update_multi",         STMT_STATUS(SQLCOM_UPDATE_MULTI)},
   {"xa_commit",            STMT_STATUS(SQLCOM_XA_COMMIT)},

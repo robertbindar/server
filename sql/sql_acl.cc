@@ -10337,12 +10337,9 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
   DBUG_RETURN(result);
 }
 
-int mysql_lock_user(THD* thd, LEX_USER *user)
+int mysql_lock_user(THD* thd, LEX_USER *user, bool lock_cmd)
 {
-  // TODObindar: make checks for user permissions to lock other users
   DBUG_ENTER("mysql_lock_user");
-
-  printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
 
   Grant_tables tables(Table_user, TL_WRITE);
   char user_key[MAX_KEY_LENGTH];
@@ -10350,6 +10347,9 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
   int error;
   const char *host= user->host.str;
   const char *username= user->user.str;
+  const char *lock_or_unlock = lock_cmd ? "Y" : "N";
+
+  DBUG_ASSERT(!thd->is_current_stmt_binlog_format_row());
 
   if ((result= tables.open_and_lock(thd)))
     DBUG_RETURN(result != 1);
@@ -10359,6 +10359,8 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
 
   mysql_mutex_lock(&acl_cache->lock);
 
+  result= 1;
+
   ACL_USER *acl_user;
   if (!(acl_user= find_user_exact(host, username)))
   {
@@ -10367,7 +10369,7 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
     goto end;
   }
 
-  acl_user->is_locked = TRUE;
+  acl_user->is_locked = lock_cmd;
 
   tables.user_table().table()->use_all_columns();
 
@@ -10388,8 +10390,7 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
     goto end;
   }
 
-  user_table.is_locked()->store("Y", 1, system_charset_info);
-
+  user_table.is_locked()->store(lock_or_unlock, 1, system_charset_info);
   store_record(table, record[1]);
 
   if (unlikely(error= table->file->ha_update_row(table->record[1],
@@ -10403,11 +10404,15 @@ int mysql_lock_user(THD* thd, LEX_USER *user)
 
   acl_cache->clear(1);
   mysql_mutex_unlock(&acl_cache->lock);
+  result = 0;
 
-  end:
-    close_mysql_tables(thd);
+end:
+  close_mysql_tables(thd);
 
-  DBUG_RETURN(TRUE);
+  if (mysql_bin_log.is_open())
+    result |= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
+
+  DBUG_RETURN(result);
 }
 
 static bool
@@ -13246,16 +13251,9 @@ bool acl_authenticate(THD *thd, uint com_change_user_pkt_len)
       DBUG_RETURN(1);
     }
 
-    // TODO:bindar add check for lock_user
     if (acl_user->is_locked) {
       status_var_increment(denied_connections);
-
-      my_error(ER_ACCESS_DENIED_ERROR, MYF(0),
-          acl_user->user.str,
-          acl_user->host.hostname,
-          ER_THD(thd, ER_YES));
-
-      //my_error(ER_LOCKED_ACCOUNT, MYF(0));
+      my_error(ER_LOCKED_ACCOUNT, MYF(0));
       DBUG_RETURN(1);
     }
 

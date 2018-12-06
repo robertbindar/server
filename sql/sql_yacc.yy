@@ -16560,7 +16560,6 @@ lock:
 
             lex->sql_command= SQLCOM_LOCK_USER;
             lex->grant_user = $3;
-            // TODO: exit conditions
           }
         ;
 
@@ -16630,6 +16629,16 @@ unlock:
           }
           table_or_tables
           {}
+          | UNLOCK_SYM USER_SYM user_or_role
+          {
+            LEX *lex= Lex;
+
+            if (unlikely(lex->sphead))
+              my_yyabort_error((ER_SP_BADSTATEMENT, MYF(0), "LOCK"));
+
+            lex->sql_command= SQLCOM_UNLOCK_USER;
+            lex->grant_user = $3;
+          }
         ;
 
 /*

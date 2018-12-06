@@ -5221,23 +5221,31 @@ end_with_restore_list:
     }
     break;
   case SQLCOM_LOCK_USER:
+  case SQLCOM_UNLOCK_USER:
   {
-    // TODO: implement lock user policies
-
-    //if (check_access(thd, UPDATE_ACL, "mysql", NULL, NULL, 1, 1) &&
-        //check_global_access(thd,CREATE_USER_ACL))
-      //break;
-
-
-    WSREP_TO_ISOLATION_BEGIN(WSREP_MYSQL_DB, NULL, NULL);
+    if (check_global_access(thd, SUPER_ACL))
+      break;
 
     LEX_USER *user= get_current_user(thd, lex->grant_user);
 
-    mysql_lock_user(thd, user);
+    /*
+       Do not allow the current user to lock itself out
+    */
+    if (!strcmp(thd->security_ctx->priv_user, user->user.str) &&
+        !my_strcasecmp(system_charset_info, user->host.str,
+                       thd->security_ctx->priv_host))
+    {
+      my_error(ER_CANNOT_USER, MYF(0), "LOCK USER", user->user.str);
+      break;
+    }
 
-    printf("######### sql_parse - %s %s\n", user->user.str, user->host.str);
+    WSREP_TO_ISOLATION_BEGIN(WSREP_MYSQL_DB, NULL, NULL);
 
-    my_ok(thd);
+    bool lock_cmd = lex->sql_command == SQLCOM_LOCK_USER;
+    res = mysql_lock_user(thd, user, lock_cmd);
+
+    if (!res)
+      my_ok(thd);
 
     break;
   }
