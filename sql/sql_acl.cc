@@ -10337,17 +10337,29 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
   DBUG_RETURN(result);
 }
 
-int mysql_lock_user(THD* thd, LEX_USER *user, bool lock_cmd)
+/*
+  Mark an user account as locked or unlocked.
+
+  SYNOPSIS
+    mysql_lock_user()
+    thd                         The current thread.
+    list                        The users to lock/unlock.
+    lock_cmd                    true locks an user, false unlocks.
+
+  RETURN
+    > 0         Error. Error message already sent.
+    0           OK.
+*/
+int mysql_lock_user(THD* thd, List<LEX_USER> &users_list, bool lock_cmd)
 {
   DBUG_ENTER("mysql_lock_user");
 
   Grant_tables tables(Table_user, TL_WRITE);
   char user_key[MAX_KEY_LENGTH];
-  int result= 1;
+  int result= 0;
   int error;
-  const char *host= user->host.str;
-  const char *username= user->user.str;
   const char *lock_or_unlock = lock_cmd ? "Y" : "N";
+  String wrong_users;
 
   DBUG_ASSERT(!thd->is_current_stmt_binlog_format_row());
 
@@ -10357,60 +10369,81 @@ int mysql_lock_user(THD* thd, LEX_USER *user, bool lock_cmd)
   const User_table& user_table= tables.user_table();
   TABLE *table= user_table.table();
 
+  mysql_rwlock_wrlock(&LOCK_grant);
   mysql_mutex_lock(&acl_cache->lock);
 
-  result= 1;
-
-  ACL_USER *acl_user;
-  if (!(acl_user= find_user_exact(host, username)))
+  result= 0;
+  LEX_USER *tmp_lex_user;
+  List_iterator<LEX_USER> users_list_iterator(users_list);
+  while ((tmp_lex_user= users_list_iterator++))
   {
-    mysql_mutex_unlock(&acl_cache->lock);
-    my_message(ER_PASSWORD_NO_MATCH, ER_THD(thd, ER_PASSWORD_NO_MATCH), MYF(0));
-    goto end;
-  }
+    printf("################## %s %s\n", tmp_lex_user->user.str, tmp_lex_user->host.str);
+    LEX_USER* lex_user= get_current_user(thd, tmp_lex_user, false);
 
-  acl_user->is_locked = lock_cmd;
+    /*
+       Do not allow the current user to lock itself out
+    */
+    if (!lex_user ||
+        (!strcmp(thd->security_ctx->priv_user, lex_user->user.str) &&
+         !my_strcasecmp(system_charset_info, lex_user->host.str,
+                        thd->security_ctx->priv_host)))
+    {
+      result= 1;
+      append_user(thd, &wrong_users, tmp_lex_user);
+      continue;
+    }
 
-  tables.user_table().table()->use_all_columns();
+    const char *host= lex_user->host.str;
+    const char *username= lex_user->user.str;
+    ACL_USER *acl_user;
+    if (!(acl_user= find_user_exact(host, username)))
+    {
+      result= 1;
+      my_error(ER_PASSWORD_NO_MATCH, MYF(0));
+      append_user(thd, &wrong_users, tmp_lex_user);
+      continue;
+    }
 
-  user_table.host()->store(host,(uint) strlen(host), system_charset_info);
-  user_table.user()->store(username,(uint) strlen(username),
-                           system_charset_info);
+    acl_user->is_locked = lock_cmd;
 
-  key_copy((uchar *) user_key, table->record[0], table->key_info,
-           table->key_info->key_length);
+    table->use_all_columns();
+    user_table.host()->store(host,(uint) strlen(host), system_charset_info);
+    user_table.user()->store(username,(uint) strlen(username),
+                             system_charset_info);
 
-  if (table->file->ha_index_read_idx_map(table->record[0], 0,
-                                         (uchar *) user_key, HA_WHOLE_KEY,
-                                         HA_READ_KEY_EXACT))
-  {
-    mysql_mutex_unlock(&acl_cache->lock);
-    my_message(ER_PASSWORD_NO_MATCH, ER_THD(thd, ER_PASSWORD_NO_MATCH),
-               MYF(0));
-    goto end;
-  }
+    key_copy((uchar *) user_key, table->record[0], table->key_info,
+             table->key_info->key_length);
+    if (table->file->ha_index_read_idx_map(table->record[0], 0,
+                                           (uchar *) user_key, HA_WHOLE_KEY,
+                                           HA_READ_KEY_EXACT))
+    {
+      result= 1;
+      my_error(ER_PASSWORD_NO_MATCH, MYF(0));
+      append_user(thd, &wrong_users, tmp_lex_user);
+      continue;
+    }
 
-  user_table.is_locked()->store(lock_or_unlock, 1, system_charset_info);
-  store_record(table, record[1]);
+    user_table.is_locked()->store(lock_or_unlock, 1, system_charset_info);
+    store_record(table, record[1]);
 
-  if (unlikely(error= table->file->ha_update_row(table->record[1],
-                                                 table->record[0])) &&
-      error != HA_ERR_RECORD_IS_THE_SAME)
-  {
-    mysql_mutex_unlock(&acl_cache->lock);
-    table->file->print_error(error, MYF(0)); /* purecov: deadcode */
-    goto end;
+    if (unlikely(error= table->file->ha_update_row(table->record[1],
+                                                   table->record[0])) &&
+        error != HA_ERR_RECORD_IS_THE_SAME)
+    {
+      table->file->print_error(error, MYF(0)); /* purecov: deadcode */
+    }
   }
 
   acl_cache->clear(1);
   mysql_mutex_unlock(&acl_cache->lock);
-  result = 0;
 
-end:
-  close_mysql_tables(thd);
+  if (result)
+    my_error(ER_CANNOT_USER, MYF(0), "LOCK USER", wrong_users.c_ptr_safe());
 
   if (mysql_bin_log.is_open())
     result |= write_bin_log(thd, FALSE, thd->query(), thd->query_length());
+
+  mysql_rwlock_unlock(&LOCK_grant);
 
   DBUG_RETURN(result);
 }

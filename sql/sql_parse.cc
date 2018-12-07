@@ -5226,25 +5226,10 @@ end_with_restore_list:
     if (check_global_access(thd, SUPER_ACL))
       break;
 
-    LEX_USER *user= get_current_user(thd, lex->grant_user);
-
-    /*
-       Do not allow the current user to lock itself out
-    */
-    if (!strcmp(thd->security_ctx->priv_user, user->user.str) &&
-        !my_strcasecmp(system_charset_info, user->host.str,
-                       thd->security_ctx->priv_host))
-    {
-      my_error(ER_CANNOT_USER, MYF(0), "LOCK USER", user->user.str);
-      break;
-    }
-
     WSREP_TO_ISOLATION_BEGIN(WSREP_MYSQL_DB, NULL, NULL);
 
     bool lock_cmd = lex->sql_command == SQLCOM_LOCK_USER;
-    res = mysql_lock_user(thd, user, lock_cmd);
-
-    if (!res)
+    if (!mysql_lock_user(thd, lex->users_list, lock_cmd))
       my_ok(thd);
 
     break;
