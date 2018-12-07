@@ -10377,7 +10377,6 @@ int mysql_lock_user(THD* thd, List<LEX_USER> &users_list, bool lock_cmd)
   List_iterator<LEX_USER> users_list_iterator(users_list);
   while ((tmp_lex_user= users_list_iterator++))
   {
-    printf("################## %s %s\n", tmp_lex_user->user.str, tmp_lex_user->host.str);
     LEX_USER* lex_user= get_current_user(thd, tmp_lex_user, false);
 
     /*

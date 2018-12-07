@@ -16562,7 +16562,7 @@ lock:
 
             lex->sql_command= SQLCOM_LOCK_USER;
           }
-          user_list
+          clear_privileges user_list
           {}
         ;
 
@@ -16646,7 +16646,7 @@ unlock:
 
             lex->sql_command= SQLCOM_UNLOCK_USER;
           }
-          user_list
+          clear_privileges user_list
           {}
         ;
 
