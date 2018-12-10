@@ -254,6 +254,9 @@ static bool show_table_and_column_privileges(THD *, const char *, const char *,
 static int show_routine_grants(THD *, const char *, const char *,
                                const Sp_handler *sph, char *, int);
 
+static bool show_account_locked(THD *thd, const char *, const char *, char *,
+                                size_t);
+
 class Grant_tables;
 class User_table;
 class Proxies_priv_table;
@@ -1775,7 +1778,6 @@ static bool acl_load(THD *thd, const Grant_tables& tables)
     char *username= safe_str(get_field(&acl_memroot, user_table.user()));
     user.user.str= username;
     user.user.length= strlen(username);
-    user.is_locked = get_YN_as_bool(user_table.is_locked());
 
     /*
        If the user entry is a role, skip password and hostname checks
@@ -1797,6 +1799,9 @@ static bool acl_load(THD *thd, const Grant_tables& tables)
                         safe_str(user.host.hostname));
       continue;
     }
+
+    if (user_table.is_locked())
+      user.is_locked = get_YN_as_bool(user_table.is_locked());
 
     if (user_table.password())
     {
@@ -8499,6 +8504,10 @@ bool mysql_show_grants(THD *thd, LEX_USER *lex_user)
 
     if (show_proxy_grants(thd, username, hostname, buff, sizeof(buff)))
       goto end;
+
+    if (acl_user->is_locked &&
+        show_account_locked(thd, username, hostname, buff, sizeof(buff)))
+      goto end;
   }
 
   if (rolename)
@@ -8532,6 +8541,29 @@ end:
   DBUG_RETURN(error);
 }
 
+
+static bool show_account_locked(THD *thd, const char *username,
+                                const char *hostname, char *buff,
+                                size_t buffsize)
+{
+  Protocol *protocol= thd->protocol;
+  LEX_CSTRING host= {const_cast<char*>(hostname), strlen(hostname)};
+  LEX_CSTRING user= {const_cast<char*>(username), strlen(username)};
+
+  String grant(buff,sizeof(buff),system_charset_info);
+  grant.length(0);
+  grant.append(STRING_WITH_LEN("USER ACCOUNT: '"));
+  grant.append(user);
+  grant.append(STRING_WITH_LEN("'@'"));
+  grant.append(host);
+  grant.append(STRING_WITH_LEN("' IS LOCKED"));
+
+  protocol->prepare_for_resend();
+  protocol->store(grant.ptr(),grant.length(),grant.charset());
+
+  return protocol->write();
+}
+
 static ROLE_GRANT_PAIR *find_role_grant_pair(const LEX_CSTRING *u,
                                              const LEX_CSTRING *h,
                                              const LEX_CSTRING *r)
@@ -8548,7 +8580,6 @@ static ROLE_GRANT_PAIR *find_role_grant_pair(const LEX_CSTRING *u,
   return (ROLE_GRANT_PAIR *)
     my_hash_search(&acl_roles_mappings, (uchar*)pair_key.ptr(), key_length);
 }
-
 static bool show_role_grants(THD *thd, const char *username,
                              const char *hostname, ACL_USER_BASE *acl_entry,
                              char *buff, size_t buffsize)
@@ -10380,12 +10411,14 @@ int mysql_lock_user(THD* thd, List<LEX_USER> &users_list, bool lock_cmd)
     LEX_USER* lex_user= get_current_user(thd, tmp_lex_user, false);
 
     /*
-       Do not allow the current user to lock itself out
+       Do not allow the current user to lock itself out.
     */
-    if (!lex_user ||
-        (!strcmp(thd->security_ctx->priv_user, lex_user->user.str) &&
+    ACL_USER *current_acl_user= find_user_wild(thd->security_ctx->priv_host,
+                                               thd->security_ctx->priv_user);
+    if (!current_acl_user ||
+        (!strcmp(lex_user->user.str, current_acl_user->user.str) &&
          !my_strcasecmp(system_charset_info, lex_user->host.str,
-                        thd->security_ctx->priv_host)))
+                        current_acl_user->host.hostname)))
     {
       result= 1;
       append_user(thd, &wrong_users, tmp_lex_user);
@@ -10403,7 +10436,13 @@ int mysql_lock_user(THD* thd, List<LEX_USER> &users_list, bool lock_cmd)
       continue;
     }
 
-    acl_user->is_locked = lock_cmd;
+    /*
+       Move to the next user if the current one is already locked/unlocked
+    */
+    if (acl_user->is_locked == lock_cmd)
+      continue;
+
+    acl_user->is_locked= lock_cmd;
 
     table->use_all_columns();
     user_table.host()->store(host,(uint) strlen(host), system_charset_info);
