@@ -600,10 +600,11 @@ exec $MYSQL_BINLOG --version;
 --echo # MDEV-14978 Client programs should use MYSQL_HOST as default host
 --echo #
 
-### Starting master-bin.000022
-#flush logs;
-
+connect (con1, localhost, root, , test);
+connection con1;
 --error 1
 --exec $MYSQL_BINLOG_NOARGS -R some_dummy_unexisting_binfile 2>&1 > /dev/null
+disconnect con1;
+connection default;
 
 
