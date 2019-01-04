@@ -601,5 +601,5 @@ exec $MYSQL_BINLOG --version;
 --echo #
 
 --error 1
---exec $MYSQL_BINLOG_NOARGS --no-defaults -R some_dummy_unexisting_binfile
+--exec $MYSQL_BINLOG_NOARGS --no-defaults -R some_dummy_unexisting_binfile 2>&1 > /dev/null
 
