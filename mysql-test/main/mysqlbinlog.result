@@ -1260,8 +1260,7 @@ mysqlbinlog Ver VER for OS at ARCH
 #
 # MDEV-14978 Client programs should use MYSQL_HOST as default host
 #
-connect  con1, localhost, root, , test;
-connection con1;
-ERROR: Failed on connect: Unknown MySQL server host 'unexisting_host_name' (-2)
-disconnect con1;
-connection default;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!40019 SET @@session.max_insert_delayed_threads=0*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
