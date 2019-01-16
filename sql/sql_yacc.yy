@@ -905,6 +905,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  ESCAPED
 %token  EXCEPT_SYM                    /* SQL-2003-R */
 %token  EXISTS                        /* SQL-2003-R */
+%token  EXPIRE_SYM
 %token  EXTRACT_SYM                   /* SQL-2003-N */
 %token  FALSE_SYM                     /* SQL-2003-R */
 %token  FETCH_SYM                     /* SQL-2003-R */
@@ -990,6 +991,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  NCHAR_STRING
 %token  NE                            /* OPERATOR */
 %token  NEG
+%token  NEVER_SYM
 %token  NOT2_SYM
 %token  NOT_SYM                       /* SQL-2003-R */
 %token  NOW_SYM
@@ -8031,6 +8033,29 @@ opt_account_option:
           {
             Lex->account_options.update_account_locking= true;
             Lex->account_options.account_locked_value= false;
+          }
+        | PASSWORD_SYM EXPIRE_SYM opt_password_expire
+          {
+            Lex->account_options.update_password_expiration= true;
+          }
+        ;
+opt_password_expire:
+        /* Nothing */
+          {
+            Lex->account_options.pass_exp_type= PASSWORD_EXPIRE_NOW;
+          }
+        | NEVER_SYM
+          {
+            Lex->account_options.pass_exp_type= PASSWORD_EXPIRE_NEVER;
+          }
+        | DEFAULT
+          {
+            Lex->account_options.pass_exp_type= PASSWORD_EXPIRE_DEFAULT;
+          }
+        | INTERVAL_SYM real_ulong_num DAY_SYM
+          {
+            Lex->account_options.pass_exp_type= PASSWORD_EXPIRE_INTERVAL;
+            Lex->account_options.num_expiration_days= $2;
           }
         ;
 
@@ -15960,6 +15985,7 @@ keyword_sp_var_and_label:
         | EXCEPTION_MARIADB_SYM
         | EXCHANGE_SYM
         | EXPANSION_SYM
+        | EXPIRE_SYM
         | EXPORT_SYM
         | EXTENDED_SYM
         | EXTENT_SIZE_SYM
@@ -16050,6 +16076,7 @@ keyword_sp_var_and_label:
         | MYSQL_SYM
         | MYSQL_ERRNO_SYM
         | NAME_SYM
+        | NEVER_SYM
         | NEXT_SYM           %prec PREC_BELOW_CONTRACTION_TOKEN2
         | NEXTVAL_SYM
         | NEW_SYM

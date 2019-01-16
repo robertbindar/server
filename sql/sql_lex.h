@@ -2923,23 +2923,40 @@ public:
   Explain_delete* save_explain_delete_data(MEM_ROOT *mem_root, THD *thd);
 };
 
+enum password_exp_type
+{
+  PASSWORD_EXPIRE_UNSPECIFIED,
+  PASSWORD_EXPIRE_NOW,
+  PASSWORD_EXPIRE_NEVER,
+  PASSWORD_EXPIRE_DEFAULT,
+  PASSWORD_EXPIRE_INTERVAL
+};
+
 struct Account_options
 {
   Account_options()
     : update_account_locking(false)
     , account_locked_value(false)
+    , update_password_expiration(false)
+    , pass_exp_type(PASSWORD_EXPIRE_UNSPECIFIED)
+    , num_expiration_days(0)
   { }
 
   void reset()
   {
     update_account_locking= false;
     account_locked_value= false;
+    update_password_expiration= false;
+    pass_exp_type= PASSWORD_EXPIRE_UNSPECIFIED;
+    num_expiration_days= 0;
   }
 
   bool update_account_locking;
   bool account_locked_value;
+  bool update_password_expiration;
+  password_exp_type pass_exp_type;
+  uint32 num_expiration_days;
 };
-
 
 class Query_arena_memroot;
 /* The state of the lex parsing. This is saved in the THD struct */

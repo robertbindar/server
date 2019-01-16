@@ -10580,6 +10580,10 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
   String wrong_users;
   bool some_users_altered= false;
 
+  printf("############# update: %d\n", thd->lex->account_options.update_password_expiration);
+  printf("############# type: %d\n", thd->lex->account_options.pass_exp_type);
+  printf("############# num: %d\n", thd->lex->account_options.num_expiration_days);
+
   /* The only table we're altering is the user table. */
   Grant_tables tables;
   if ((result= tables.open_and_lock(thd, Table_user, TL_WRITE)))
