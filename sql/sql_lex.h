@@ -2930,20 +2930,34 @@ enum account_lock_type
   ACCOUNTLOCK_UNLOCKED
 };
 
+enum password_exp_type
+{
+  PASSWORD_EXPIRE_UNSPECIFIED,
+  PASSWORD_EXPIRE_NOW,
+  PASSWORD_EXPIRE_NEVER,
+  PASSWORD_EXPIRE_DEFAULT,
+  PASSWORD_EXPIRE_INTERVAL
+};
+
 struct Account_options
 {
   Account_options()
     : account_locked(ACCOUNTLOCK_UNSPECIFIED)
+    , password_expire(PASSWORD_EXPIRE_UNSPECIFIED)
+    , num_expiration_days(0)
   { }
 
   void reset()
   {
     account_locked= ACCOUNTLOCK_UNSPECIFIED;
+    password_expire= PASSWORD_EXPIRE_UNSPECIFIED;
+    num_expiration_days= 0;
   }
 
   account_lock_type account_locked;
+  password_exp_type password_expire;
+  longlong num_expiration_days;
 };
-
 
 class Query_arena_memroot;
 /* The state of the lex parsing. This is saved in the THD struct */

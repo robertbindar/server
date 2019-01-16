@@ -228,6 +228,7 @@ struct AUTHID
 struct LEX_USER: public AUTHID
 {
   LEX_CSTRING plugin, auth, pwtext;
+  bool is_changing_password;
   void reset_auth()
   {
     pwtext.length= plugin.length= auth.length= 0;

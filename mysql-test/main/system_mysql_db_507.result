@@ -177,14 +177,47 @@ connect con1,localhost,user1;
 ERROR HY000: Access denied, this account is locked
 show create user user1@localhost;
 CREATE USER for user1@localhost
-CREATE USER 'user1'@'localhost' ACCOUNT LOCK
+CREATE USER 'user1'@'localhost' PASSWORD EXPIRE DEFAULT ACCOUNT LOCK
 alter user user1@localhost account unlock;
 connect con1,localhost,user1;
 disconnect con1;
 connection default;
 show create user user1@localhost;
 CREATE USER for user1@localhost
-CREATE USER 'user1'@'localhost' ACCOUNT UNLOCK
+CREATE USER 'user1'@'localhost' PASSWORD EXPIRE DEFAULT ACCOUNT UNLOCK
+#
+# Test password expiration fields are loaded correctly
+#
+create user user@localhost;
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE DEFAULT ACCOUNT UNLOCK
+alter user user@localhost password expire;
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE ACCOUNT UNLOCK
+set password for user@localhost= password('');
+alter user user@localhost password expire default;
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE DEFAULT ACCOUNT UNLOCK
+alter user user@localhost password expire never;
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE NEVER ACCOUNT UNLOCK
+alter user user@localhost password expire interval 123 day;
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE INTERVAL 123 DAY ACCOUNT UNLOCK
+alter user user@localhost password expire;
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE ACCOUNT UNLOCK
+set password for user@localhost= password('');
+show create user user@localhost;
+CREATE USER for user@localhost
+CREATE USER 'user'@'localhost' PASSWORD EXPIRE INTERVAL 123 DAY ACCOUNT UNLOCK
+drop user user@localhost;
 #
 # Reset to final original state.
 #

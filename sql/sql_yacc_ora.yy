@@ -763,6 +763,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  <kwd>  EXIT_MARIADB_SYM              /* PLSQL-R */
 %token  <kwd>  EXIT_ORACLE_SYM               /* PLSQL-R */
 %token  <kwd>  EXPANSION_SYM
+%token  <kwd>  EXPIRE_SYM                    /* MySQL */
 %token  <kwd>  EXPORT_SYM
 %token  <kwd>  EXTENDED_SYM
 %token  <kwd>  EXTENT_SIZE_SYM
@@ -878,6 +879,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
 %token  <kwd>  NAME_SYM                      /* SQL-2003-N */
 %token  <kwd>  NATIONAL_SYM                  /* SQL-2003-R */
 %token  <kwd>  NCHAR_SYM                     /* SQL-2003-R */
+%token  <kwd>  NEVER_SYM                     /* MySQL */
 %token  <kwd>  NEW_SYM                       /* SQL-2003-R */
 %token  <kwd>  NEXT_SYM                      /* SQL-2003-N */
 %token  <kwd>  NEXTVAL_SYM                   /* PostgreSQL sequence function */
@@ -8060,6 +8062,34 @@ opt_account_option:
         | ACCOUNT_SYM UNLOCK_SYM
           {
             Lex->account_options.account_locked= ACCOUNTLOCK_UNLOCKED;
+          }
+        | PASSWORD_SYM EXPIRE_SYM opt_password_expire
+          { }
+        ;
+opt_password_expire:
+        /* Nothing */
+          {
+            Lex->account_options.password_expire= PASSWORD_EXPIRE_NOW;
+          }
+        | NEVER_SYM
+          {
+            Lex->account_options.password_expire= PASSWORD_EXPIRE_NEVER;
+          }
+        | DEFAULT
+          {
+            Lex->account_options.password_expire= PASSWORD_EXPIRE_DEFAULT;
+          }
+        | INTERVAL_SYM real_ulong_num DAY_SYM
+          {
+            if (unlikely($2 == 0 || $2 > UINT_MAX16))
+            {
+              char num[MAX_BIGINT_WIDTH + 1];
+              my_snprintf(num, sizeof(num), "%lu", $2);
+              my_yyabort_error((ER_WRONG_VALUE, MYF(0), "DAY", num));
+            }
+
+            Lex->account_options.password_expire= PASSWORD_EXPIRE_INTERVAL;
+            Lex->account_options.num_expiration_days= $2;
           }
         ;
 
@@ -16047,6 +16077,7 @@ keyword_sp_var_and_label:
         | EXCEPTION_MARIADB_SYM
         | EXCHANGE_SYM
         | EXPANSION_SYM
+        | EXPIRE_SYM
         | EXPORT_SYM
         | EXTENDED_SYM
         | EXTENT_SIZE_SYM
@@ -16139,6 +16170,7 @@ keyword_sp_var_and_label:
         | NAME_SYM
         | NEXT_SYM           %prec PREC_BELOW_CONTRACTION_TOKEN2
         | NEXTVAL_SYM
+        | NEVER_SYM
         | NEW_SYM
         | NOCACHE_SYM
         | NOCYCLE_SYM
@@ -17313,17 +17345,20 @@ grant_user:
           {
             $$= $1;
             $1->pwtext= $4;
+            $1->is_changing_password= true;
           }
         | user IDENTIFIED_SYM BY PASSWORD_SYM TEXT_STRING
           { 
             $$= $1; 
             $1->auth= $5;
+            $1->is_changing_password= true;
           }
         | user IDENTIFIED_SYM via_or_with ident_or_text
           {
             $$= $1;
             $1->plugin= $4;
             $1->auth= empty_clex_str;
+            $1->is_changing_password= true;
           }
         | user IDENTIFIED_SYM via_or_with ident_or_text using_or_as
           TEXT_STRING_sys
@@ -17331,6 +17366,7 @@ grant_user:
             $$= $1;
             $1->plugin= $4;
             $1->auth= $6;
+            $1->is_changing_password= true;
           }
         | user IDENTIFIED_SYM via_or_with ident_or_text using_or_as
           PASSWORD_SYM '(' TEXT_STRING ')'
@@ -17338,9 +17374,13 @@ grant_user:
             $$= $1;
             $1->plugin= $4;
             $1->pwtext= $8;
+            $1->is_changing_password= true;
           }
         | user_or_role
-          { $$= $1; }
+          {
+            $$= $1;
+            $1->is_changing_password= false;
+          }
         ;
 
 opt_column_list:

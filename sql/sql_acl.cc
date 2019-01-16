@@ -154,6 +154,9 @@ public:
   LEX_CSTRING default_rolename;
   LEX_CSTRING salt;
   bool account_locked;
+  bool password_expired;
+  my_time_t password_last_changed;
+  longlong password_lifetime;
 
   ACL_USER *copy(MEM_ROOT *root)
   {
@@ -634,7 +637,7 @@ static ACL_ROLE *find_acl_role(const char *user);
 static ROLE_GRANT_PAIR *find_role_grant_pair(const LEX_CSTRING *u, const LEX_CSTRING *h, const LEX_CSTRING *r);
 static ACL_USER_BASE *find_acl_user_base(const char *user, const char *host);
 static bool update_user_table_password(THD *, const User_table&,
-                                       const ACL_USER &);
+                                       ACL_USER*);
 static bool acl_load(THD *thd, const Grant_tables& grant_tables);
 static inline void get_grantor(THD *thd, char* grantor);
 static bool add_role_user_mapping(const char *uname, const char *hname, const char *rname);
@@ -856,6 +859,12 @@ class User_table: public Grant_table_base
   virtual int set_default_role (const char *s, size_t l) const = 0;
   virtual bool get_account_locked () const = 0;
   virtual int set_account_locked (bool x) const = 0;
+  virtual bool get_password_expired () const = 0;
+  virtual int set_password_expired (bool x) const = 0;
+  virtual my_time_t get_password_last_changed () const = 0;
+  virtual int set_password_last_changed (const my_time_t &x) const = 0;
+  virtual longlong get_password_lifetime () const = 0;
+  virtual int set_password_lifetime (longlong x) const = 0;
 
   virtual ~User_table() {}
  private:
@@ -1115,8 +1124,70 @@ class User_table_tabular: public User_table
   {
     if (Field *f= get_field(end_priv_columns + 13, MYSQL_TYPE_ENUM))
       return f->store(x+1, 0);
-    else
-      return 1;
+
+    return 1;
+  }
+
+  bool get_password_expired () const
+  {
+    uint field_num= end_priv_columns + 10;
+
+    Field *f= get_field(field_num, MYSQL_TYPE_ENUM);
+    return f ? f->val_int()-1 : 0;
+  }
+  int set_password_expired (bool x) const
+  {
+    uint field_num= end_priv_columns + 10;
+
+    if (Field *f= get_field(field_num, MYSQL_TYPE_ENUM))
+      return f->store(x+1, 0);
+
+    return 1;
+  }
+  my_time_t get_password_last_changed () const
+  {
+    ulong unused_dec;
+    if (Field *f= get_field(end_priv_columns + 11, MYSQL_TYPE_TIMESTAMP2))
+      return f->get_timestamp(&unused_dec);
+
+    return 0;
+  }
+  int set_password_last_changed (const my_time_t &x) const
+  {
+    if (Field *f= get_field(end_priv_columns + 11, MYSQL_TYPE_TIMESTAMP2))
+    {
+      f->set_notnull();
+      return f->store_timestamp(x, 0);
+    }
+
+    return 1;
+  }
+  longlong get_password_lifetime () const
+  {
+    if (Field *f= get_field(end_priv_columns + 12, MYSQL_TYPE_SHORT))
+    {
+      if (f->is_null())
+        return -1;
+
+      return f->val_int();
+    }
+
+    return 0;
+  }
+  int set_password_lifetime (longlong x) const
+  {
+    if (Field *f= get_field(end_priv_columns + 12, MYSQL_TYPE_SHORT))
+    {
+      if (x < 0)
+      {
+        f->set_null();
+        return 0;
+      }
+      f->set_notnull();
+      return f->store(x, 0);
+    }
+
+    return 1;
   }
 
   virtual ~User_table_tabular() {}
@@ -1300,6 +1371,37 @@ class User_table_json: public User_table
   { return get_bool_value("account_locked"); }
   int set_account_locked (bool x) const
   { return set_bool_value("account_locked", x); }
+  my_time_t get_password_last_changed () const
+  { return get_int_value("password_last_changed"); }
+  int set_password_last_changed (const my_time_t &x) const
+  { return set_int_value("password_last_changed", x); }
+  int set_password_lifetime (longlong x) const
+  { return set_int_value("password_lifetime", x); }
+  longlong get_password_lifetime () const
+  {
+    size_t value_len;
+    const char *value_start;
+    const char *key= "password_lifetime";
+    if (get_value(key, JSV_NUMBER, &value_start, &value_len))
+      return -1;
+    return get_int_value(key);
+  }
+  /*
+     password_last_changed=0 means the password is manually expired.
+     In MySQL 5.7+ this state is described using the password_expired column
+     in mysql.user
+  */
+  bool get_password_expired () const
+  {
+    size_t value_len;
+    const char *value_start;
+    const char *key= "password_last_changed";
+    if (get_value(key, JSV_NUMBER, &value_start, &value_len))
+      return false;
+    return get_password_last_changed() == 0;
+  }
+  int set_password_expired (bool x) const
+  { return x ? set_password_last_changed(0) : 0; }
 
   ~User_table_json() {}
  private:
@@ -1369,6 +1471,7 @@ class User_table_json: public User_table
       return false;
     return true;
   }
+
   bool set_value(const char *key,
                  const char *val, size_t vlen, bool string) const
   {
@@ -2101,6 +2204,10 @@ static bool acl_load(THD *thd, const Grant_tables& tables)
 
     user.account_locked= user_table.get_account_locked();
 
+    user.password_expired= user_table.get_password_expired();
+    user.password_last_changed= user_table.get_password_last_changed();
+    user.password_lifetime= user_table.get_password_lifetime();
+
     if (is_role)
     {
       if (is_invalid_role_name(username))
@@ -2686,6 +2793,7 @@ bool acl_getroot(Security_context *sctx, const char *user, const char *host,
 
   DBUG_PRINT("enter", ("Host: '%s', Ip: '%s', User: '%s', db: '%s'",
                        host, ip, user, db));
+  sctx->init();
   sctx->user= *user ? user : NULL;
   sctx->host= host;
   sctx->ip= ip;
@@ -2702,9 +2810,7 @@ bool acl_getroot(Security_context *sctx, const char *user, const char *host,
 
   mysql_mutex_lock(&acl_cache->lock);
 
-  sctx->master_access= 0;
   sctx->db_access= 0;
-  *sctx->priv_user= *sctx->priv_host= *sctx->priv_role= 0;
 
   if (host[0]) // User, not Role
   {
@@ -3355,10 +3461,13 @@ static int check_alter_user(THD *thd, const char *host, const char *user)
 
   if (!thd->slave_thread &&
       IF_WSREP((!WSREP(thd) || !thd->wsrep_applier),1) &&
-      (strcmp(thd->security_ctx->priv_user, user) ||
-       my_strcasecmp(system_charset_info, host,
-                     thd->security_ctx->priv_host)))
+      !thd->security_ctx->is_priv_user(user, host))
   {
+    if (thd->security_ctx->password_expired)
+    {
+      my_error(ER_MUST_CHANGE_PASSWORD, MYF(0));
+      goto end;
+    }
     if (check_access(thd, UPDATE_ACL, "mysql", NULL, NULL, 1, 0))
       goto end;
   }
@@ -3457,7 +3566,7 @@ bool change_password(THD *thd, LEX_USER *user)
     goto end;
   }
 
-  if (update_user_table_password(thd, tables.user_table(), *acl_user))
+  if (update_user_table_password(thd, tables.user_table(), acl_user))
   {
     mysql_mutex_unlock(&acl_cache->lock); /* purecov: deadcode */
     goto end;
@@ -3904,7 +4013,7 @@ bool hostname_requires_resolving(const char *hostname)
 */
 
 static bool update_user_table_password(THD *thd, const User_table& user_table,
-                                      const ACL_USER &user)
+                                       ACL_USER *user)
 {
   char user_key[MAX_KEY_LENGTH];
   int error;
@@ -3912,8 +4021,8 @@ static bool update_user_table_password(THD *thd, const User_table& user_table,
 
   TABLE *table= user_table.table();
   table->use_all_columns();
-  user_table.set_host(user.host.hostname, user.hostname_length);
-  user_table.set_user(user.user.str, user.user.length);
+  user_table.set_host(user->host.hostname, user->hostname_length);
+  user_table.set_user(user->user.str, user->user.length);
   key_copy((uchar *) user_key, table->record[0], table->key_info,
            table->key_info->key_length);
 
@@ -3927,8 +4036,13 @@ static bool update_user_table_password(THD *thd, const User_table& user_table,
   }
   store_record(table,record[1]);
 
-  user_table.set_auth(user.plugin.str, user.plugin.length,
-                      user.auth_string.str, user.auth_string.length);
+  user_table.set_auth(user->plugin.str, user->plugin.length,
+                      user->auth_string.str, user->auth_string.length);
+
+  /* Update the persistent password expired state of user */
+  user_table.set_password_expired(false);
+  my_time_t now= thd->query_start();
+  user_table.set_password_last_changed(now);
 
   if (unlikely(error= table->file->ha_update_row(table->record[1],
                                                  table->record[0])) &&
@@ -3937,6 +4051,16 @@ static bool update_user_table_password(THD *thd, const User_table& user_table,
     table->file->print_error(error,MYF(0));  /* purecov: deadcode */
     DBUG_RETURN(1);
   }
+
+  /* Update the acl password expired state of user */
+  user->password_last_changed= now;
+  user->password_expired= false;
+
+  /* If user is the connected user, reset the password expired field on sctx
+     and allow the user to exit sandbox mode */
+  if (thd->security_ctx->is_priv_user(user->user.str, user->host.hostname))
+    thd->security_ctx->password_expired= false;
+
   DBUG_RETURN(0);
 }
 
@@ -4152,6 +4276,45 @@ static int replace_user_table(THD *thd, const User_table &user_table,
       bool lock_value= lex->account_options.account_locked == ACCOUNTLOCK_LOCKED;
       user_table.set_account_locked(lock_value);
       new_acl_user.account_locked= lock_value;
+    }
+
+    my_time_t now= thd->query_start();
+    if (!old_row_exists)
+    {
+      user_table.set_password_last_changed(now);
+      new_acl_user.password_last_changed= now;
+      new_acl_user.password_lifetime= -1;
+    }
+
+    /* Unexpire the user password */
+    if (combo->is_changing_password)
+    {
+      user_table.set_password_expired(false);
+      user_table.set_password_last_changed(now);
+      new_acl_user.password_last_changed= now;
+      new_acl_user.password_expired= false;
+    }
+
+    switch (lex->account_options.password_expire) {
+    case PASSWORD_EXPIRE_UNSPECIFIED:
+      break;
+    case PASSWORD_EXPIRE_NOW:
+      user_table.set_password_expired(true);
+      new_acl_user.password_expired= true;
+      break;
+    case PASSWORD_EXPIRE_NEVER:
+      user_table.set_password_lifetime(0);
+      new_acl_user.password_lifetime= 0;
+      break;
+    case PASSWORD_EXPIRE_DEFAULT:
+      user_table.set_password_lifetime(-1);
+      new_acl_user.password_lifetime= -1;
+      break;
+    case PASSWORD_EXPIRE_INTERVAL:
+      longlong interval= lex->account_options.num_expiration_days;
+      user_table.set_password_lifetime(interval);
+      new_acl_user.password_lifetime= interval;
+      break;
     }
   }
 
@@ -8614,6 +8777,19 @@ bool mysql_show_create_user(THD *thd, LEX_USER *lex_user)
 
   add_user_parameters(&result, acl_user, false);
 
+  if (acl_user->password_expired)
+    result.append(STRING_WITH_LEN(" PASSWORD EXPIRE"));
+  else if (!acl_user->password_lifetime)
+    result.append(STRING_WITH_LEN(" PASSWORD EXPIRE NEVER"));
+  else if (acl_user->password_lifetime > 0)
+  {
+    result.append(STRING_WITH_LEN(" PASSWORD EXPIRE INTERVAL "));
+    char days[MAX_BIGINT_WIDTH + 1];
+    my_snprintf(days, sizeof(days), "%lu", acl_user->password_lifetime);
+    result.append(days);
+    result.append(STRING_WITH_LEN(" DAY"));
+  }
+
   if (acl_user->account_locked)
     result.append(STRING_WITH_LEN(" ACCOUNT LOCK"));
   else
@@ -10548,6 +10724,7 @@ int mysql_alter_user(THD* thd, List<LEX_USER> &users_list)
 
   LEX_USER *tmp_lex_user;
   List_iterator<LEX_USER> users_list_iterator(users_list);
+
   while ((tmp_lex_user= users_list_iterator++))
   {
     LEX_USER* lex_user= get_current_user(thd, tmp_lex_user, false);
@@ -11140,9 +11317,7 @@ acl_check_proxy_grant_access(THD *thd, const char *host, const char *user,
     or revoking proxy privilege, user is expected to provide entries mentioned
     in mysql.user table.
   */
-  if (!strcmp(thd->security_ctx->priv_user, user) &&
-      !my_strcasecmp(system_charset_info, host,
-                     thd->security_ctx->priv_host))
+  if (thd->security_ctx->is_priv_user(user, host))
   {
     DBUG_PRINT("info", ("strcmp (%s, %s) my_casestrcmp (%s, %s) equal",
                         thd->security_ctx->priv_user, user,
@@ -11513,7 +11688,6 @@ int fill_schema_user_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
   TABLE *table= tables->table;
   bool no_global_access= check_access(thd, SELECT_ACL, "mysql",
                                       NULL, NULL, 1, 1);
-  char *curr_host= thd->security_ctx->priv_host_name();
   DBUG_ENTER("fill_schema_user_privileges");
 
   if (!initialized)
@@ -11528,8 +11702,7 @@ int fill_schema_user_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
     host= safe_str(acl_user->host.hostname);
 
     if (no_global_access &&
-        (strcmp(thd->security_ctx->priv_user, user) ||
-         my_strcasecmp(system_charset_info, curr_host, host)))
+        !thd->security_ctx->is_priv_user(user, host))
       continue;
 
     want_access= acl_user->access;
@@ -11586,7 +11759,6 @@ int fill_schema_schema_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
   TABLE *table= tables->table;
   bool no_global_access= check_access(thd, SELECT_ACL, "mysql",
                                       NULL, NULL, 1, 1);
-  char *curr_host= thd->security_ctx->priv_host_name();
   DBUG_ENTER("fill_schema_schema_privileges");
 
   if (!initialized)
@@ -11602,8 +11774,7 @@ int fill_schema_schema_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
     host= safe_str(acl_db->host.hostname);
 
     if (no_global_access &&
-        (strcmp(thd->security_ctx->priv_user, user) ||
-         my_strcasecmp(system_charset_info, curr_host, host)))
+        !thd->security_ctx->is_priv_user(user, host))
       continue;
 
     want_access=acl_db->access;
@@ -11660,7 +11831,6 @@ int fill_schema_table_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
   TABLE *table= tables->table;
   bool no_global_access= check_access(thd, SELECT_ACL, "mysql",
                                       NULL, NULL, 1, 1);
-  char *curr_host= thd->security_ctx->priv_host_name();
   DBUG_ENTER("fill_schema_table_privileges");
 
   mysql_rwlock_rdlock(&LOCK_grant);
@@ -11674,8 +11844,7 @@ int fill_schema_table_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
     host= safe_str(grant_table->host.hostname);
 
     if (no_global_access &&
-        (strcmp(thd->security_ctx->priv_user, user) ||
-         my_strcasecmp(system_charset_info, curr_host, host)))
+        thd->security_ctx->is_priv_user(user, host))
       continue;
 
     ulong table_access= grant_table->privs;
@@ -11742,7 +11911,6 @@ int fill_schema_column_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
   TABLE *table= tables->table;
   bool no_global_access= check_access(thd, SELECT_ACL, "mysql",
                                       NULL, NULL, 1, 1);
-  char *curr_host= thd->security_ctx->priv_host_name();
   DBUG_ENTER("fill_schema_table_privileges");
 
   mysql_rwlock_rdlock(&LOCK_grant);
@@ -11756,8 +11924,7 @@ int fill_schema_column_privileges(THD *thd, TABLE_LIST *tables, COND *cond)
     host= safe_str(grant_table->host.hostname);
 
     if (no_global_access &&
-        (strcmp(thd->security_ctx->priv_user, user) ||
-         my_strcasecmp(system_charset_info, curr_host, host)))
+        thd->security_ctx->is_priv_user(user, host))
       continue;
 
     ulong table_access= grant_table->cols;
@@ -13294,6 +13461,33 @@ static void handle_password_errors(const char *user, const char *hostname, PASSW
 #endif
 }
 
+bool check_password_lifetime(THD *thd, const ACL_USER *acl_user)
+{
+  /* the password should never expire */
+  if (!acl_user->password_lifetime)
+    return false;
+
+  longlong interval= acl_user->password_lifetime;
+  if (acl_user->password_lifetime < 0)
+  {
+    interval= default_password_lifetime;
+
+    /* default global policy applies, and that is password never expires */
+    if (!interval)
+      return false;
+  }
+
+  thd->set_time();
+  longlong interval_sec= 3600 * 24 * interval;
+
+  /* this helps test set a testable password lifetime in seconds not days */
+  DBUG_EXECUTE_IF("password_expiration_interval_sec", { interval_sec= interval; });
+
+  if (thd->query_start() - acl_user->password_last_changed > interval_sec)
+    return true;
+
+  return false;
+}
 
 /**
   Perform the handshake, authorize the client and update thd sctx variables.
@@ -13511,6 +13705,21 @@ bool acl_authenticate(THD *thd, uint com_change_user_pkt_len)
       my_error(ER_LOCKED_ACCOUNT, MYF(0));
       DBUG_RETURN(1);
     }
+
+    bool client_can_handle_exp_pass= thd->client_capabilities &
+                                     CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS;
+    bool password_lifetime_due= check_password_lifetime(thd, acl_user);
+
+    if (!client_can_handle_exp_pass && disconnect_on_expired_password &&
+        (acl_user->password_expired || password_lifetime_due))
+    {
+      status_var_increment(denied_connections);
+      my_error(ER_MUST_CHANGE_PASSWORD_LOGIN, MYF(0));
+      DBUG_RETURN(1);
+    }
+
+    sctx->password_expired= acl_user->password_expired ||
+                            password_lifetime_due;
 
     /*
       Don't allow the user to connect if he has done too many queries.

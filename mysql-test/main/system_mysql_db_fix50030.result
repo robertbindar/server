@@ -108,6 +108,8 @@ user	CREATE TABLE `user` (
   `plugin` char(64) CHARACTER SET latin1 NOT NULL DEFAULT '',
   `authentication_string` text COLLATE utf8_bin NOT NULL,
   `password_expired` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N',
+  `password_last_changed` timestamp NOT NULL DEFAULT current_timestamp(),
+  `password_lifetime` smallint(5) unsigned NOT NULL DEFAULT 0,
   `account_locked` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N',
   `is_role` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N',
   `default_role` char(80) COLLATE utf8_bin NOT NULL DEFAULT '',
