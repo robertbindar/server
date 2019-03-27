@@ -96,7 +96,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "innobackupex.h"
 #include "backup_mysql.h"
 #include "backup_copy.h"
-#include "backup_mysql.h"
 #include "encryption_plugin.h"
 #include <sql_plugin.h>
 #include <srv0srv.h>
@@ -2122,6 +2121,26 @@ xtrabackup_write_metadata(const char *filepath)
 		return(FALSE);
 	}
 	if (fwrite(buf, len, 1, fp) < 1) {
+		fclose(fp);
+		return(FALSE);
+	}
+
+	fclose(fp);
+
+	return(TRUE);
+}
+
+static
+my_bool
+copy_binlog_state(const char *filepath)
+{
+	FILE *fp;
+	std::string s("Gigi\n");
+	if (!(fp= fopen(filepath, "w"))) {
+		msg("Error: cannot open %s", filepath);
+		return(FALSE);
+	}
+	if (fwrite(s.c_str(), s.size(), 1, fp) < 1) {
 		fclose(fp);
 		return(FALSE);
 	}
@@ -5605,6 +5624,14 @@ static bool xtrabackup_prepare_func(char** argv)
 
 	if (ok && xtrabackup_export)
 		ok= (prepare_export() == 0);
+
+	if (ok) {
+	  char filename[FN_REFLEN];
+	  sprintf(filename, "%s/%s", xtrabackup_target_dir, "slave-bin.state");
+	  if (!(ok= copy_binlog_state(filename)))
+	    msg("mariabackup: Error: failed to write "
+	        "binlog state to '%s'", filename);
+	}
 
 error_cleanup:
 	xb_filters_free();

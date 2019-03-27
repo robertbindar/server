@@ -1281,6 +1281,7 @@ write_binlog_info(MYSQL *connection)
 	char *position = NULL;
 	char *gtid_mode = NULL;
 	char *gtid_current_pos = NULL;
+	char *gtid_binlog_state = NULL;
 	char *gtid_executed = NULL;
 	char *gtid = NULL;
 	bool result;
@@ -1297,6 +1298,7 @@ write_binlog_info(MYSQL *connection)
 	mysql_variable vars[] = {
 		{"gtid_mode", &gtid_mode},
 		{"gtid_current_pos", &gtid_current_pos},
+		{"gtid_binlog_state", &gtid_binlog_state},
 		{NULL, NULL}
 	};
 
@@ -1318,11 +1320,11 @@ write_binlog_info(MYSQL *connection)
 	if (mariadb_gtid || mysql_gtid) {
 		ut_a(asprintf(&mysql_binlog_position,
 			"filename '%s', position '%s', "
-			"GTID of the last change '%s'",
+			"GTID of the last change '%s', ",
 			filename, position, gtid) != -1);
 		result = backup_file_printf(XTRABACKUP_BINLOG_INFO,
-					    "%s\t%s\t%s\n", filename, position,
-					    gtid);
+					    "%s\t%s\t%s\t%s\n", filename, position,
+					    gtid, gtid_binlog_state);
 	} else {
 		ut_a(asprintf(&mysql_binlog_position,
 			"filename '%s', position '%s'",
