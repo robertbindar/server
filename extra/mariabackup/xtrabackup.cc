@@ -75,6 +75,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <list>
 #include <sstream>
+#include <fstream>
 #include <set>
 #include <mysql.h>
 
@@ -2132,20 +2133,38 @@ xtrabackup_write_metadata(const char *filepath)
 
 static
 my_bool
-copy_binlog_state(const char *filepath)
+copy_binlog_state()
 {
-	FILE *fp;
-	std::string s("Gigi\n");
-	if (!(fp= fopen(filepath, "w"))) {
-		msg("Error: cannot open %s", filepath);
-		return(FALSE);
-	}
-	if (fwrite(s.c_str(), s.size(), 1, fp) < 1) {
-		fclose(fp);
+	using std::string;
+
+	char binlog_info_fname[FN_REFLEN];
+	sprintf(binlog_info_fname, "%s/%s", xtrabackup_target_dir,
+		XTRABACKUP_BINLOG_INFO);
+
+	std::ifstream fbinlog_info(binlog_info_fname);
+	if (!fbinlog_info.is_open()) {
+		msg("Error: cannot open %s", binlog_info_fname);
 		return(FALSE);
 	}
 
-	fclose(fp);
+	string binlog_state, unused_file, unused_pos, unused_gtid;
+	fbinlog_info >> unused_file >> unused_pos >> unused_gtid >> binlog_state;
+
+	char binlog_state_fname[FN_REFLEN];
+	sprintf(binlog_state_fname, "%s/%s", xtrabackup_target_dir,
+		"slave2-bin.state");
+
+	std::ofstream fbinlog_state(binlog_state_fname);
+	if (!fbinlog_state.is_open()) {
+		msg("Error: cannot open %s", binlog_state_fname);
+		return(FALSE);
+	}
+
+	std::stringstream ss(binlog_state);
+	string gtid;
+	while (std::getline(ss, gtid, ',')) {
+		fbinlog_state << gtid << '\n';
+	}
 
 	return(TRUE);
 }
@@ -5626,11 +5645,8 @@ static bool xtrabackup_prepare_func(char** argv)
 		ok= (prepare_export() == 0);
 
 	if (ok) {
-	  char filename[FN_REFLEN];
-	  sprintf(filename, "%s/%s", xtrabackup_target_dir, "slave-bin.state");
-	  if (!(ok= copy_binlog_state(filename)))
-	    msg("mariabackup: Error: failed to write "
-	        "binlog state to '%s'", filename);
+	  if (!(ok= copy_binlog_state()))
+	    msg("mariabackup: Error: failed to copy binlog state");
 	}
 
 error_cleanup:
