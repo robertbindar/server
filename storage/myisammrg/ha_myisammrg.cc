@@ -1741,25 +1741,35 @@ int myisammrg_panic(handlerton *hton, ha_panic_function flag)
 
 static int myisammrg_init(void *p)
 {
-  handlerton *myisammrg_hton;
-
-  myisammrg_hton= (handlerton *)p;
-
 #ifdef HAVE_PSI_INTERFACE
   init_myisammrg_psi_keys();
 #endif
 
-  myisammrg_hton->db_type= DB_TYPE_MRG_MYISAM;
-  myisammrg_hton->create= myisammrg_create_handler;
-  myisammrg_hton->panic= myisammrg_panic;
-  myisammrg_hton->flags= HTON_NO_PARTITION;
-  myisammrg_hton->tablefile_extensions= ha_myisammrg_exts;
-
   return 0;
 }
 
+class myisammrg_handlerton : public handlerton
+{
+public:
+  myisammrg_handlerton();
+};
+
+myisammrg_handlerton::myisammrg_handlerton()
+{
+  this->db_type= DB_TYPE_MRG_MYISAM;
+  this->create= myisammrg_create_handler;
+  this->panic= myisammrg_panic;
+  this->flags= HTON_NO_PARTITION;
+  this->tablefile_extensions= ha_myisammrg_exts;
+}
+
+static myisammrg_handlerton hton;
+
 struct st_mysql_storage_engine myisammrg_storage_engine=
-{ MYSQL_HANDLERTON_INTERFACE_VERSION };
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
+};
 
 maria_declare_plugin(myisammrg)
 {

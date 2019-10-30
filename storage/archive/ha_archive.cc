@@ -208,18 +208,10 @@ static const char *ha_archive_exts[] = {
 int archive_db_init(void *p)
 {
   DBUG_ENTER("archive_db_init");
-  handlerton *archive_hton;
 
 #ifdef HAVE_PSI_INTERFACE
   init_archive_psi_keys();
 #endif
-
-  archive_hton= (handlerton *)p;
-  archive_hton->db_type= DB_TYPE_ARCHIVE_DB;
-  archive_hton->create= archive_create_handler;
-  archive_hton->flags= HTON_NO_FLAGS;
-  archive_hton->discover_table= archive_discover;
-  archive_hton->tablefile_extensions= ha_archive_exts;
 
   DBUG_RETURN(0);
 }
@@ -1928,9 +1920,28 @@ bool ha_archive::check_if_incompatible_data(HA_CREATE_INFO *info_arg,
   return COMPATIBLE_DATA_NO;
 }
 
+class archive_handlerton : public handlerton
+{
+public:
+  archive_handlerton();
+};
+
+archive_handlerton::archive_handlerton()
+{
+  this->db_type= DB_TYPE_ARCHIVE_DB;
+  this->create= archive_create_handler;
+  this->flags= HTON_NO_FLAGS;
+  this->discover_table= archive_discover;
+  this->tablefile_extensions= ha_archive_exts;
+}
+
+static archive_handlerton hton;
 
 struct st_mysql_storage_engine archive_storage_engine=
-{ MYSQL_HANDLERTON_INTERFACE_VERSION };
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
+};
 
 maria_declare_plugin(archive)
 {

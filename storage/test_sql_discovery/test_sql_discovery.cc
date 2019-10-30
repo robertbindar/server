@@ -149,14 +149,28 @@ static int discover_table(handlerton *hton, THD* thd, TABLE_SHARE *share)
 
 static int init(void *p)
 {
-  handlerton *hton = (handlerton *)p;
-  hton->create = create_handler;
-  hton->discover_table = discover_table;
   return 0;
 }
 
+class tsd_handlerton : public handlerton
+{
+public:
+  tsd_handlerton();
+};
+
+tsd_handlerton::tsd_handlerton()
+{
+  this->create = create_handler;
+  this->discover_table = ::discover_table;
+}
+
+static tsd_handlerton hton;
+
 struct st_mysql_storage_engine descriptor =
-{ MYSQL_HANDLERTON_INTERFACE_VERSION };
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
+};
 
 maria_declare_plugin(test_sql_discovery)
 {

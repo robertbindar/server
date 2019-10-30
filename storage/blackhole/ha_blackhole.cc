@@ -391,16 +391,9 @@ void init_blackhole_psi_keys()
 
 static int blackhole_init(void *p)
 {
-  handlerton *blackhole_hton;
-
 #ifdef HAVE_PSI_INTERFACE
   init_blackhole_psi_keys();
 #endif
-
-  blackhole_hton= (handlerton *)p;
-  blackhole_hton->db_type= DB_TYPE_BLACKHOLE_DB;
-  blackhole_hton->create= blackhole_create_handler;
-  blackhole_hton->flags= HTON_CAN_RECREATE;
 
   mysql_mutex_init(bh_key_mutex_blackhole,
                    &blackhole_mutex, MY_MUTEX_INIT_FAST);
@@ -419,8 +412,26 @@ static int blackhole_fini(void *p)
   return 0;
 }
 
+class blackhole_handlerton : public handlerton
+{
+public:
+  blackhole_handlerton();
+};
+
+blackhole_handlerton::blackhole_handlerton()
+{
+  this->db_type= DB_TYPE_BLACKHOLE_DB;
+  this->create= blackhole_create_handler;
+  this->flags= HTON_CAN_RECREATE;
+}
+
+static blackhole_handlerton hton;
+
 struct st_mysql_storage_engine blackhole_storage_engine=
-{ MYSQL_HANDLERTON_INTERFACE_VERSION };
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
+};
 
 mysql_declare_plugin(blackhole)
 {

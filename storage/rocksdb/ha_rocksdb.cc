@@ -237,6 +237,14 @@ static rocksdb::CompactRangeOptions getCompactRangeOptions(
   return compact_range_options;
 }
 
+class rocksdb_handlerton : public handlerton
+{
+public:
+  rocksdb_handlerton();
+};
+
+static rocksdb_handlerton hton;
+
 ///////////////////////////////////////////////////////////
 // Parameters and settings
 ///////////////////////////////////////////////////////////
@@ -247,7 +255,7 @@ static char *rocksdb_update_cf_options = nullptr;
 ///////////////////////////////////////////////////////////
 // Globals
 ///////////////////////////////////////////////////////////
-handlerton *rocksdb_hton;
+handlerton *rocksdb_hton= &hton;
 
 rocksdb::TransactionDB *rdb = nullptr;
 rocksdb::HistogramImpl *commit_latency_stats = nullptr;
@@ -5192,6 +5200,47 @@ bool prevent_myrocks_loading= false;
   Storage Engine initialization function, invoked when plugin is loaded.
 */
 
+rocksdb_handlerton::rocksdb_handlerton()
+{
+  this->create = rocksdb_create_handler;
+  this->close_connection = rocksdb_close_connection;
+
+  this->prepare = rocksdb_prepare;
+  this->prepare_ordered = NULL; // Do not need it
+
+  this->commit_by_xid = rocksdb_commit_by_xid;
+  this->rollback_by_xid = rocksdb_rollback_by_xid;
+  this->recover = rocksdb_recover;
+
+  this->commit_ordered= rocksdb_commit_ordered;
+  this->commit = rocksdb_commit;
+
+  this->commit_checkpoint_request= rocksdb_checkpoint_request;
+
+  this->rollback = rocksdb_rollback;
+  this->show_status = rocksdb_show_status;
+#ifdef MARIADB_NOT_YET  
+  this->explicit_snapshot = rocksdb_explicit_snapshot;
+#endif  
+  this->start_consistent_snapshot =
+      rocksdb_start_tx_and_assign_read_view;
+#ifdef MARIADB_NOT_YET  
+  this->start_shared_snapshot = rocksdb_start_tx_with_shared_read_view;
+#endif  
+  this->savepoint_set = rocksdb_savepoint;
+  this->savepoint_rollback = rocksdb_rollback_to_savepoint;
+  this->savepoint_rollback_can_release_mdl =
+      rocksdb_rollback_to_savepoint_can_release_mdl;
+#ifdef MARIAROCKS_NOT_YET
+  this->update_table_stats = rocksdb_update_table_stats;
+#endif // MARIAROCKS_NOT_YET
+
+  this->flags = HTON_TEMPORARY_NOT_SUPPORTED |
+                        HTON_SUPPORTS_EXTENDED_KEYS | HTON_CAN_RECREATE;
+
+  this->tablefile_extensions= ha_rocksdb_exts;
+}
+
 static int rocksdb_init_func(void *const p) {
 
   DBUG_ENTER_FUNC();
@@ -5230,8 +5279,6 @@ static int rocksdb_init_func(void *const p) {
 
   init_rocksdb_psi_keys();
 
-  rocksdb_hton = (handlerton *)p;
-
   rdb_open_tables.init();
   Ensure_cleanup rdb_open_tables_cleanup([]() { rdb_open_tables.free(); });
 
@@ -5268,50 +5315,6 @@ static int rocksdb_init_func(void *const p) {
                    &rdb_block_cache_resize_mutex, MY_MUTEX_INIT_FAST);
   Rdb_transaction::init_mutex();
 
-  rocksdb_hton->create = rocksdb_create_handler;
-  rocksdb_hton->close_connection = rocksdb_close_connection;
-
-  rocksdb_hton->prepare = rocksdb_prepare;
-  rocksdb_hton->prepare_ordered = NULL; // Do not need it
-
-  rocksdb_hton->commit_by_xid = rocksdb_commit_by_xid;
-  rocksdb_hton->rollback_by_xid = rocksdb_rollback_by_xid;
-  rocksdb_hton->recover = rocksdb_recover;
-
-  rocksdb_hton->commit_ordered= rocksdb_commit_ordered;
-  rocksdb_hton->commit = rocksdb_commit;
-
-  rocksdb_hton->commit_checkpoint_request= rocksdb_checkpoint_request;
-
-  rocksdb_hton->rollback = rocksdb_rollback;
-  rocksdb_hton->show_status = rocksdb_show_status;
-#ifdef MARIADB_NOT_YET  
-  rocksdb_hton->explicit_snapshot = rocksdb_explicit_snapshot;
-#endif  
-  rocksdb_hton->start_consistent_snapshot =
-      rocksdb_start_tx_and_assign_read_view;
-#ifdef MARIADB_NOT_YET  
-  rocksdb_hton->start_shared_snapshot = rocksdb_start_tx_with_shared_read_view;
-#endif  
-  rocksdb_hton->savepoint_set = rocksdb_savepoint;
-  rocksdb_hton->savepoint_rollback = rocksdb_rollback_to_savepoint;
-  rocksdb_hton->savepoint_rollback_can_release_mdl =
-      rocksdb_rollback_to_savepoint_can_release_mdl;
-#ifdef MARIAROCKS_NOT_YET
-  rocksdb_hton->update_table_stats = rocksdb_update_table_stats;
-#endif // MARIAROCKS_NOT_YET
-  
-  /*
-  Not needed in MariaDB:
-  rocksdb_hton->flush_logs = rocksdb_flush_wal;
-  rocksdb_hton->handle_single_table_select = rocksdb_handle_single_table_select;
-
-  */
-
-  rocksdb_hton->flags = HTON_TEMPORARY_NOT_SUPPORTED |
-                        HTON_SUPPORTS_EXTENDED_KEYS | HTON_CAN_RECREATE;
-
-  rocksdb_hton->tablefile_extensions= ha_rocksdb_exts;
   DBUG_ASSERT(!mysqld_embedded);
 
   if (rocksdb_db_options->max_open_files > (long)open_files_limit) {
@@ -14595,8 +14598,11 @@ void print_keydup_error(TABLE *table, KEY *key, myf errflag,
 */
 
 
-struct st_mysql_storage_engine rocksdb_storage_engine = {
-    MYSQL_HANDLERTON_INTERFACE_VERSION};
+struct st_mysql_storage_engine rocksdb_storage_engine =
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &myrocks::hton
+};
 
 maria_declare_plugin(rocksdb_se){
     MYSQL_STORAGE_ENGINE_PLUGIN,       /* Plugin Type */

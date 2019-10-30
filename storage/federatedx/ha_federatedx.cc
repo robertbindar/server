@@ -402,7 +402,17 @@ static void init_federated_psi_keys(void)
 #define init_federated_psi_keys() /* no-op */
 #endif /* HAVE_PSI_INTERFACE */
 
-handlerton* federatedx_hton;
+
+class federatedx_handlerton : public handlerton
+{
+public:
+  federatedx_handlerton();
+};
+
+static federatedx_handlerton hton;
+
+// TODO: check if used externly
+handlerton* federatedx_hton= &hton;
 
 static derived_handler*
 create_federatedx_derived_handler(THD* thd, TABLE_LIST *derived);
@@ -425,21 +435,6 @@ int federatedx_db_init(void *p)
 {
   DBUG_ENTER("federatedx_db_init");
   init_federated_psi_keys();
-  federatedx_hton= (handlerton *)p;
-  /* Needed to work with old .frm files */
-  federatedx_hton->db_type= DB_TYPE_FEDERATED_DB;
-  federatedx_hton->savepoint_offset= sizeof(ulong);
-  federatedx_hton->close_connection= ha_federatedx::disconnect;
-  federatedx_hton->savepoint_set= ha_federatedx::savepoint_set;
-  federatedx_hton->savepoint_rollback= ha_federatedx::savepoint_rollback;
-  federatedx_hton->savepoint_release= ha_federatedx::savepoint_release;
-  federatedx_hton->commit= ha_federatedx::commit;
-  federatedx_hton->rollback= ha_federatedx::rollback;
-  federatedx_hton->discover_table_structure= ha_federatedx::discover_assisted;
-  federatedx_hton->create= federatedx_create_handler;
-  federatedx_hton->flags= HTON_ALTER_NOT_SUPPORTED;
-  federatedx_hton->create_derived= create_federatedx_derived_handler;
-  federatedx_hton->create_select= create_federatedx_select_handler;
 
   if (mysql_mutex_init(fe_key_mutex_federatedx,
                        &federatedx_mutex, MY_MUTEX_INIT_FAST))
@@ -3679,9 +3674,29 @@ err1:
   return error;
 }
 
+federatedx_handlerton::federatedx_handlerton()
+{
+  /* Needed to work with old .frm files */
+  this->db_type= DB_TYPE_FEDERATED_DB;
+  this->savepoint_offset= sizeof(ulong);
+  this->close_connection= ha_federatedx::disconnect;
+  this->savepoint_set= ha_federatedx::savepoint_set;
+  this->savepoint_rollback= ha_federatedx::savepoint_rollback;
+  this->savepoint_release= ha_federatedx::savepoint_release;
+  this->commit= ha_federatedx::commit;
+  this->rollback= ha_federatedx::rollback;
+  this->discover_table_structure= ha_federatedx::discover_assisted;
+  this->create= federatedx_create_handler;
+  this->flags= HTON_ALTER_NOT_SUPPORTED;
+  this->create_derived= create_federatedx_derived_handler;
+  this->create_select= create_federatedx_select_handler;
+}
 
 struct st_mysql_storage_engine federatedx_storage_engine=
-{ MYSQL_HANDLERTON_INTERFACE_VERSION };
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
+};
 
 my_bool use_pushdown;
 static MYSQL_SYSVAR_BOOL(pushdown, use_pushdown, 0,

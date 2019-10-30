@@ -739,16 +739,6 @@ static int sphinx_init_func ( void * p )
 		void ( pthread_mutex_init ( &sphinx_mutex, MY_MUTEX_INIT_FAST ) );
 		sphinx_hash_init ( &sphinx_open_tables, system_charset_info, 32, 0, 0,
 			sphinx_get_key, 0, 0 );
-
-		#if MYSQL_VERSION_ID > 50100
-		handlerton * hton = (handlerton*) p;
-		hton->db_type = DB_TYPE_AUTOASSIGN;
-		hton->create = sphinx_create_handler;
-		hton->close_connection = sphinx_close_connection;
-		hton->show_status = sphinx_show_status;
-		hton->panic = sphinx_panic;
-		hton->flags = HTON_CAN_RECREATE;
-		#endif
 	}
 	SPH_RET(0);
 }
@@ -3649,9 +3639,29 @@ int sphinx_showfunc_error ( THD * thd, SHOW_VAR * out, char * )
 }
 
 #if MYSQL_VERSION_ID>50100
+
+class sphinx_handlerton : public handlerton
+{
+public:
+  sphinx_handlerton();
+};
+
+sphinx_handlerton::sphinx_handlerton()
+{
+  this->db_type = DB_TYPE_AUTOASSIGN;
+  this->create = sphinx_create_handler;
+  this->close_connection = sphinx_close_connection;
+  this->show_status = sphinx_show_status;
+  this->panic = sphinx_panic;
+  this->flags = HTON_CAN_RECREATE;
+}
+
+static sphinx_handlerton hton;
+
 struct st_mysql_storage_engine sphinx_storage_engine =
 {
-	MYSQL_HANDLERTON_INTERFACE_VERSION
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
 };
 
 struct st_mysql_show_var sphinx_status_vars[] =

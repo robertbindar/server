@@ -72,7 +72,15 @@
 
 #define FLAGSTR(V,F) ((V)&(F)?#F" ":"")
 
-handlerton *binlog_hton;
+class binlog_handlerton : public handlerton
+{
+public:
+  binlog_handlerton();
+};
+
+static binlog_handlerton hton;
+
+handlerton *binlog_hton= &hton;
 LOGGER logger;
 
 const char *log_bin_index= 0;
@@ -1679,21 +1687,11 @@ binlog_trans_log_truncate(THD *thd, my_off_t pos)
 
 int binlog_init(void *p)
 {
-  binlog_hton= (handlerton *)p;
-  binlog_hton->savepoint_offset= sizeof(my_off_t);
-  binlog_hton->close_connection= binlog_close_connection;
-  binlog_hton->savepoint_set= binlog_savepoint_set;
-  binlog_hton->savepoint_rollback= binlog_savepoint_rollback;
-  binlog_hton->savepoint_rollback_can_release_mdl=
-                                     binlog_savepoint_rollback_can_release_mdl;
-  binlog_hton->commit= binlog_commit;
-  binlog_hton->rollback= binlog_rollback;
   if (WSREP_ON || opt_bin_log)
   {
-    binlog_hton->prepare= binlog_prepare;
-    binlog_hton->start_consistent_snapshot= binlog_start_consistent_snapshot;
+    hton.prepare= binlog_prepare;
+    hton.start_consistent_snapshot= binlog_start_consistent_snapshot;
   }
-  binlog_hton->flags= HTON_NOT_USER_SELECTABLE | HTON_HIDDEN;
   return 0;
 }
 
@@ -10644,9 +10642,24 @@ get_gtid_list_event(IO_CACHE *cache, Gtid_list_log_event **out_gtid_list)
   return errormsg;
 }
 
+binlog_handlerton::binlog_handlerton()
+{
+  this->savepoint_offset= sizeof(my_off_t);
+  this->close_connection= binlog_close_connection;
+  this->savepoint_set= binlog_savepoint_set;
+  this->savepoint_rollback= binlog_savepoint_rollback;
+  this->savepoint_rollback_can_release_mdl=
+                                     binlog_savepoint_rollback_can_release_mdl;
+  this->commit= binlog_commit;
+  this->rollback= binlog_rollback;
+  this->flags= HTON_NOT_USER_SELECTABLE | HTON_HIDDEN;
+}
 
-struct st_mysql_storage_engine binlog_storage_engine=
-{ MYSQL_HANDLERTON_INTERFACE_VERSION };
+static struct st_mysql_storage_engine binlog_storage_engine=
+{
+  MYSQL_HANDLERTON_INTERFACE_VERSION,
+  &hton
+};
 
 maria_declare_plugin(binlog)
 {
