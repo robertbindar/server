@@ -4859,6 +4859,32 @@ Sys_proxy_protocol_networks(
     ON_CHECK(check_proxy_protocol_networks), ON_UPDATE(fix_proxy_protocol_networks));
 
 
+char *my_compression_libraries;
+static bool check_compression_libraries(sys_var *, THD *, set_var *var)
+{
+  if (!var->value)
+    return false;
+  return true; //!proxy_protocol_networks_valid(var->save_result.string_value.str);
+}
+
+
+static bool fix_compression_libraries(sys_var *, THD *, enum_var_type)
+{
+  return true; //(bool)set_proxy_protocol_networks(my_proxy_protocol_networks);
+}
+
+static Sys_var_on_access_global<Sys_var_charptr_fscs,
+                            PRIV_SET_SYSTEM_GLOBAL_VAR_COMPRESSION_LIBRARIES>
+Sys_compression_libraries(
+    "use_compression", "Makes these compression libraries available for use by "
+    "storage engines. The syntax is a comma separated list of installed "
+    "libraries. \"\" represents no libraries and \"*\" represents all libraries. "
+	"Defaults to \"*\".",
+    GLOBAL_VAR(my_compression_libraries), CMD_LINE(OPT_ARG),
+    DEFAULT("*"), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_compression_libraries), ON_UPDATE(fix_compression_libraries));
+
+
 static bool check_log_path(sys_var *self, THD *thd, set_var *var)
 {
   if (!var->value)
