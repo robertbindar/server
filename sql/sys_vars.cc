@@ -4873,9 +4873,7 @@ static bool fix_compression_libraries(sys_var *, THD *, enum_var_type)
   return true; //(bool)set_proxy_protocol_networks(my_proxy_protocol_networks);
 }
 
-static Sys_var_on_access_global<Sys_var_charptr_fscs,
-                            PRIV_SET_SYSTEM_GLOBAL_VAR_COMPRESSION_LIBRARIES>
-Sys_compression_libraries(
+static Sys_var_charptr_fscs, Sys_compression_libraries(
     "use_compression", "Makes these compression libraries available for use by "
     "storage engines. The syntax is a comma separated list of installed "
     "libraries. \"\" represents no libraries and \"*\" represents all libraries. "
