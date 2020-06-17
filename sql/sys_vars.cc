@@ -4878,7 +4878,7 @@ static Sys_var_charptr_fscs, Sys_compression_libraries(
     "storage engines. The syntax is a comma separated list of installed "
     "libraries. \"\" represents no libraries and \"*\" represents all libraries. "
 	"Defaults to \"*\".",
-    GLOBAL_VAR(my_compression_libraries), CMD_LINE(OPT_ARG),
+    READ_ONLY GLOBAL_VAR(my_compression_libraries), CMD_LINE(OPT_ARG),
     DEFAULT("*"), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_compression_libraries), ON_UPDATE(fix_compression_libraries));
 
