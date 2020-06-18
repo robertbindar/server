@@ -4859,28 +4859,28 @@ Sys_proxy_protocol_networks(
     ON_CHECK(check_proxy_protocol_networks), ON_UPDATE(fix_proxy_protocol_networks));
 
 
-char *my_compression_libraries;
-static bool check_compression_libraries(sys_var *, THD *, set_var *var)
+#define COMPRESSION_BZIP2   1 << 1
+#define COMPRESSION_LZ4     1 << 2
+#define COMPRESSION_LZMA    1 << 3
+#define COMPRESSION_LZO     1 << 4
+#define COMPRESSION_SNAPPY  1 << 5
+#define COMPRESSION_ZLIB    1 << 6
+#define COMPRESSION_ZSTD    1 << 7
+#define COMPRESSION_ALL     1 << 8
+
+static const char *compression_libraries[] =
 {
-  if (!var->value)
-    return false;
-  return true; //!proxy_protocol_networks_valid(var->save_result.string_value.str);
-}
+  "bzip2", "lz4", "lzma", "lzo", "snappy", "zlib", "zstd", "ALL", NULL
+};
 
-
-static bool fix_compression_libraries(sys_var *, THD *, enum_var_type)
-{
-  return true; //(bool)set_proxy_protocol_networks(my_proxy_protocol_networks);
-}
-
-static Sys_var_charptr_fscs, Sys_compression_libraries(
+static Sys_var_set Sys_compression_libraries(
     "use_compression", "Makes these compression libraries available for use by "
     "storage engines. The syntax is a comma separated list of installed "
-    "libraries. \"\" represents no libraries and \"*\" represents all libraries. "
-    "Defaults to \"*\". Valid options are: bzip, lz4, lzma, lzo, snappy, zlib, zstd",
+    "libraries. \"\" represents no libraries and \"all\" represents all libraries. "
+    "Defaults to \"all\".",
     READ_ONLY GLOBAL_VAR(my_compression_libraries), CMD_LINE(OPT_ARG),
-    DEFAULT("*"), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(check_compression_libraries), ON_UPDATE(fix_compression_libraries));
+    compression_libraries, DEFAULT(COMPRESSION_ALL), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(NULL), ON_UPDATE(NULL));
 
 
 static bool check_log_path(sys_var *self, THD *thd, set_var *var)
