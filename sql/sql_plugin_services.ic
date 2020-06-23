@@ -227,7 +227,7 @@ static struct thd_mdl_service_st thd_mdl_handler=
   thd_mdl_context
 };
 
-static struct compression_lzma_service_st compression_lzma_handler = {
+static struct compression_service_lzma_st compression_lzma_handler = {
   lzma_stream_buffer_decode,
   lzma_easy_buffer_encode
 };

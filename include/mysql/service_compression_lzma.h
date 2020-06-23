@@ -40,11 +40,11 @@ typedef enum {
 } lzma_check;
 
 extern struct compression_service_lzma_st {
-  int (*lzma_stream_buffer_decode_ptr)(uint64_t *, uint32_t, 
+  lzma_ret (*lzma_stream_buffer_decode_ptr)(uint64_t *, uint32_t, 
        const lzma_allocator *, const uint8_t *, size_t *,
 	   size_t, uint8_t *, size_t *, size_t);
   
-  int (*lzma_easy_buffer_encode_ptr)(uint32_t, lzma_check,
+  lzma_ret (*lzma_easy_buffer_encode_ptr)(uint32_t, lzma_check,
 		const lzma_allocator *,
 		const uint8_t *, size_t,
 		uint8_t *, size_t *, size_t);
