@@ -53,8 +53,8 @@ extern struct compression_service_lzma_st {
 
 #ifdef MYSQL_DYNAMIC_PLUGIN
 
-#define deflateInit2(a, b, c, d, e, f, g) compression_service_lzma->lzma_stream_buffer_decode_ptr(a, b, c, d, e, f, g)
-#define inflateInit2(a, b) compression_service_lzma->lzma_easy_buffer_encode_ptr(a, b)
+#define lzma_stream_buffer_decode(a, b, c, d, e, f, g, h, i) compression_service_lzma->lzma_stream_buffer_decode_ptr(a, b, c, d, e, f, g, h, i)
+#define lzma_easy_buffer_encode(a, b, c, d, e, f, g, h) compression_service_lzma->lzma_easy_buffer_encode_ptr(a, b)
 
 #else
 
