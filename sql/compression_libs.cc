@@ -1,4 +1,4 @@
-#include "../include/mysql/service_compression_lzma.h"
+#include "mysql/service_compression_lzma.h"
 
 SERVICE_lzma_ret SERVICE_lzma_stream_buffer_decode(
 		uint64_t *, uint32_t,
