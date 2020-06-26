@@ -4859,14 +4859,14 @@ Sys_proxy_protocol_networks(
     ON_CHECK(check_proxy_protocol_networks), ON_UPDATE(fix_proxy_protocol_networks));
 
 
-#define COMPRESSION_BZIP2   1 << 1
-#define COMPRESSION_LZ4     1 << 2
-#define COMPRESSION_LZMA    1 << 3
-#define COMPRESSION_LZO     1 << 4
-#define COMPRESSION_SNAPPY  1 << 5
-#define COMPRESSION_ZLIB    1 << 6
-#define COMPRESSION_ZSTD    1 << 7
-#define COMPRESSION_ALL     1 << 8
+#define COMPRESSION_BZIP2   1 << 0
+#define COMPRESSION_LZ4     1 << 1
+#define COMPRESSION_LZMA    1 << 2
+#define COMPRESSION_LZO     1 << 3
+#define COMPRESSION_SNAPPY  1 << 4
+#define COMPRESSION_ZLIB    1 << 5
+#define COMPRESSION_ZSTD    1 << 6
+#define COMPRESSION_ALL     1 << 7
 
 static const char *compression_libraries[] =
 {
