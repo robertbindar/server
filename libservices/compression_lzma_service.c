@@ -14,4 +14,4 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
 
 #include <service_versions.h>
-SERVICE_VERSION compression_lzma_service = (void*) VERSION_compression_lzma;
+SERVICE_VERSION compression_service_lzma = (void*) VERSION_compression_lzma;

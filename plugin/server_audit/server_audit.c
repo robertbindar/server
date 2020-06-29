@@ -2385,6 +2385,10 @@ static void* find_sym(const char *sym)
 
 static int server_audit_init(void *p __attribute__((unused)))
 {
+  printf("test_init server_audit\n");
+  SERVICE_lzma_easy_buffer_encode(0, SERVICE_LZMA_CHECK_NONE, NULL, NULL, 0u, NULL, NULL, 0u);
+
+
   if (!serv_ver)
   {
     serv_ver= find_sym("server_version");
@@ -2493,6 +2497,8 @@ static int server_audit_init(void *p __attribute__((unused)))
   return 0;
 }
 
+#include <stdio.h>
+#include <mysql/service_compression_lzma.h>
 
 static int server_audit_init_mysql(void *p)
 {

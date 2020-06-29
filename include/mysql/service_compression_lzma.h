@@ -51,42 +51,8 @@ extern struct compression_service_lzma_st {
 } *compression_service_lzma;
 
 
-#ifdef MYSQL_DYNAMIC_PLUGIN
-
 #define SERVICE_lzma_stream_buffer_decode(a, b, c, d, e, f, g, h, i) compression_service_lzma->SERVICE_lzma_stream_buffer_decode_ptr(a, b, c, d, e, f, g, h, i)
-#define SERVICE_lzma_easy_buffer_encode(a, b, c, d, e, f, g, h) compression_service_lzma->SERVICE_lzma_easy_buffer_encode_ptr(a, b)
-
-#else
-
-#ifndef lzma_nothrow
-#	if defined(__cplusplus)
-#		if __cplusplus >= 201103L
-#			define lzma_nothrow noexcept
-#		else
-#			define lzma_nothrow throw()
-#		endif
-#	elif __GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 3)
-#		define lzma_nothrow __attribute__((__nothrow__))
-#	else
-#		define lzma_nothrow
-#	endif
-#endif
-
-extern SERVICE_lzma_ret SERVICE_lzma_stream_buffer_decode(
-		uint64_t *, uint32_t,
-		const SERVICE_lzma_allocator *,
-		const uint8_t *, size_t *, size_t,
-		uint8_t *, size_t *, size_t)
-		lzma_nothrow;
-
-
-extern SERVICE_lzma_ret SERVICE_lzma_easy_buffer_encode(
-		uint32_t, SERVICE_lzma_check,
-		const SERVICE_lzma_allocator *,
-		const uint8_t *, size_t,
-		uint8_t *, size_t *, size_t) lzma_nothrow;
-
-#endif
+#define SERVICE_lzma_easy_buffer_encode(a, b, c, d, e, f, g, h) compression_service_lzma->SERVICE_lzma_easy_buffer_encode_ptr(a, b, c, d, e, f, g, h)
 
 #ifdef __cplusplus
 }

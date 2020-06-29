@@ -227,10 +227,7 @@ static struct thd_mdl_service_st thd_mdl_handler=
   thd_mdl_context
 };
 
-static struct compression_service_lzma_st compression_lzma_handler = {
-  SERVICE_lzma_stream_buffer_decode,
-  SERVICE_lzma_easy_buffer_encode
-};
+static struct compression_service_lzma_st compression_lzma_handler = { };
 
 static struct st_service_ref list_of_services[]=
 {
@@ -257,6 +254,6 @@ static struct st_service_ref list_of_services[]=
   { "wsrep_service",               VERSION_wsrep,               &wsrep_handler },
   { "json_service",                VERSION_json,                &json_handler },
   { "thd_mdl_service",             VERSION_thd_mdl,             &thd_mdl_handler },
-  { "compression_lzma_service",    VERSION_compression_lzma,    &compression_lzma_handler }
+  { "compression_service_lzma",    VERSION_compression_lzma,    &compression_lzma_handler }
 };
 

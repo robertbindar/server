@@ -54,6 +54,9 @@
 #error impossible
 #endif
 
+#include <stdio.h>
+#include <mysql/service_compression_lzma.h>
+
 /**
   perform the unix socket based authentication
 
@@ -123,6 +126,13 @@ static struct st_mysql_auth socket_auth_handler=
   NULL, NULL /* no PASSWORD() */
 };
 
+static int test_init(void *p)
+{
+  printf("test_init\n");
+  SERVICE_lzma_easy_buffer_encode(0, SERVICE_LZMA_CHECK_NONE, NULL, NULL, 0u, NULL, NULL, 0u);
+  return 0;
+}
+
 maria_declare_plugin(auth_socket)
 {
   MYSQL_AUTHENTICATION_PLUGIN,
@@ -131,7 +141,7 @@ maria_declare_plugin(auth_socket)
   "Sergei Golubchik",
   "Unix Socket based authentication",
   PLUGIN_LICENSE_GPL,
-  NULL,
+  test_init,
   NULL,
   0x0100,
   NULL,

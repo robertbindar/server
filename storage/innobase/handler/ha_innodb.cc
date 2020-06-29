@@ -155,6 +155,9 @@ void close_thread_tables(THD* thd);
 #include "wsrep_sst.h"
 #endif /* WITH_WSREP */
 
+#include <stdio.h>
+#include <mysql/service_compression_lzma.h>
+
 /** to force correct commit order in binlog */
 static ulong commit_threads = 0;
 static mysql_cond_t commit_cond;
@@ -3873,6 +3876,8 @@ static int innodb_init_params()
 static int innodb_init(void* p)
 {
 	DBUG_ENTER("innodb_init");
+	printf("test_init\n");
+	SERVICE_lzma_easy_buffer_encode(0, SERVICE_LZMA_CHECK_NONE, NULL, NULL, 0u, NULL, NULL, 0u);
 	handlerton* innobase_hton= static_cast<handlerton*>(p);
 	innodb_hton_ptr = innobase_hton;
 

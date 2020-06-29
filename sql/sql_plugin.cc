@@ -40,6 +40,7 @@
 #include <mysql/plugin_data_type.h>
 #include <mysql/plugin_function.h>
 #include "sql_plugin_compat.h"
+#include "compression_libs.h"
 
 static PSI_memory_key key_memory_plugin_mem_root;
 static PSI_memory_key key_memory_plugin_int_mem_root;
@@ -1635,6 +1636,8 @@ int plugin_init(int *argc, char **argv, int flags)
   DBUG_ASSERT(strcmp(list_of_services[1].name, "debug_sync_service") == 0);
   list_of_services[1].service= *(void**)&debug_sync_C_callback_ptr;
 
+  init_compression_libs(&compression_lzma_handler);
+
   /* prepare encryption_keys service */
   finalize_encryption_plugin(0);
 
@@ -1782,6 +1785,7 @@ int plugin_init(int *argc, char **argv, int flags)
   }
 
   mysql_mutex_unlock(&LOCK_plugin);
+
   my_afree(reap);
   if (reaped_mandatory_plugin && !opt_help)
     goto err;
