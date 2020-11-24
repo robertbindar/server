@@ -23,6 +23,7 @@
 
 #ifndef MAIN
 
+#if !defined(__OpenBSD__)
 static my_bool memcpy_and_test(uchar *to, uchar *from, uint len)
 {
   uint i, res= 1;
@@ -32,6 +33,7 @@ static my_bool memcpy_and_test(uchar *to, uchar *from, uint len)
       res= 0;
   return res;
 }
+#endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
 #include <net/ethernet.h>
