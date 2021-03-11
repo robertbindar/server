@@ -1,51 +1,62 @@
 <!--
-Thank you for contributing to this repository!
+Thank you for contributing to the MariaDB Server repository!
 
-You can help us review your changes by answering these questions.
-They are all optional, but the more information you provide the easier it will be for us to review your changes.
-Everyone here is a volunteer, so please help us out if you can.
+You can help us review your changes by answering these questions <3
 
-If you want to discuss anything Jupyter related, or to meet other users and developers, please say hello on https://discourse.jupyter.org/ .
+The more information you provide about the contribution, the better
+for everybody. You will be happier because your contribution will be
+reviewed faster :-), the reviewer is happier because more Pull Requests
+can be accepted, other contributors are happier because they wait
+less for their PRs, the community is happier because their project
+gets better, faster.
+
+If you have any questions related to MariaDB or you just want to
+hang out and meet other community members, please join us on
+https://mariadb.zulipchat.com/ .
 -->
 
-
-### What does this PR do?
 <!--
-Please indicate the type of change made by this PR (tick one or more of the boxes) and summarise the PR.
-Please also edit the PR title so that it contains enough context to go into a changelog.
-It may help to list each change with an explanation of why it's needed- remember that what seems obvious to you may not be obvious to a reviewer.
+Please remember to search if there is an existing Jira MDEV task
+for this contribution and if there isn't one, we would highly
+appreciate if you could create one at https://jira.mariadb.org/
+and have its title be identical to the one of the Pull Request.
+Example:
+"MDEV-21221 Fix crash in sql_acl.cc when new user is created"
 -->
-Type of change:
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] *I created a Jira task for this Pull Request*
+
+<!--
+Please tick the appropriate box by adding an "x" between the square brackets.
+-->
+## Please indicate the type of contribution
+Type of contribution:
+- [ ] Bug fix
+- [ ] New feature (i.e. new functionality that is not expected to affect any other part of the server)
+- [ ] Code refactoring
 - [ ] Documentation
 - [ ] Other
 
-### Is this PR related to an issue, or is it part of a larger body of work?
 <!--
-Please feel free to provide as much context or links to external sites as you want!
-Use "Fixes #<NUM>" or "Fixes <URL to GitHub issue>" if this fixes an existing issue.
+An amazing description should answer some questions like:
+1. What problem is the patch trying to solve?
+2. If some output changed, what was it looking like before
+   the change and how it's looking with this patch applied
+3. Do you think this patch might introduce side-effects in
+   other parts of the server?
+4. Are there any backward-compatibility implications?
 -->
+## Provide a description for this change
 
-### Does this PR introduce a breaking change?
 <!--
-If so what changes might users need to make in their applications due to this PR?
+This should be filled with the exact steps that would help
+the reviewer reproduce the problem (if applicable).
 -->
-
 ### How can this PR be tested?
-<!--
-If this is not fully covered by the automated tests please help us by describing the tests that you ran to verify your changes. Make sure to provide as much detail so that we can reproduce your tests.
--->
 
-### What should a reviewer concentrate their feedback on?
 <!--
-This section is particularly useful if you have a pull request that is still in development.
-You can guide the reviews to focus on the parts that are ready for their comments.
-You can use bullet points "-" if it helps.
+If applicable. Some contributions only introduce a bug fix
+that is reproducible only on FreeBSD for instance. Please indicate
+if that's the case here.
 -->
+## Please indicate the platform/OS this patch affects
 
-### Other information
-<!--
-Please provide any other information you think is relevant
--->
