@@ -1,7 +1,7 @@
 #!/bin/sh
 set -v -x
 
-# Exclude modules from build not directly affecting the current
+# Exclude modules from build not directly affecting the currenaasdt
 # test suites found in $MYSQL_TEST_SUITES, to conserve job time
 # as well as disk usage
 
