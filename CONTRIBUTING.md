@@ -1,4 +1,4 @@
-# How to contribute
+# How to contribute 
 
 MariaDB Server has a vibrant community contributing in a wide range of areas. There are many valuable ways you can contribute to MariaDB.
 
