@@ -48,7 +48,7 @@ SYM_GROUP sym_group_rtree= {"RTree keys", "HAVE_RTREE_KEYS"};
   the perfschema.start_server_low_digest_sql_length test!
 */
 
-static SYMBOL symbols[] = {
+SYMBOL symbols[] = {
   { "&&",		SYM(AND_AND_SYM)},
   { "<=",		SYM(LE)},
   { "<>",		SYM(NE)},
@@ -798,5 +798,7 @@ static SYMBOL sql_functions[] = {
   { "VAR_POP",		SYM(VARIANCE_SYM)},
   { "VAR_SAMP",		SYM(VAR_SAMP_SYM)},
 };
+
+size_t symbols_length= sizeof(symbols) / sizeof(SYMBOL);
 
 #endif /* LEX_INCLUDED */

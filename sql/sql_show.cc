@@ -66,6 +66,12 @@
 #include "opt_trace.h"
 #include "my_cpu.h"
 
+#include "lex_symbol.h"
+#define KEYWORD_SIZE 64
+
+extern SYMBOL symbols[];
+extern size_t symbols_length;
+
 enum enum_i_s_events_fields
 {
   ISE_EVENT_CATALOG= 0,
@@ -7860,6 +7866,31 @@ int fill_variables(THD *thd, TABLE_LIST *tables, COND *cond)
   DBUG_RETURN(res);
 }
 
+int fill_i_s_keywords(THD *thd, TABLE_LIST *tables, COND *cond)
+{
+  DBUG_ENTER("fill_i_s_keywords");
+
+  TABLE *table= tables->table;
+
+  for (uint i= 0; i < symbols_length; i++){
+    const char *name= symbols[i].name;
+    uint length= strlen(name);
+
+    // If you've added a new SQL keyword longer than KEYWORD_SIZE,
+    // please increase the defined max length
+    DBUG_ASSERT(length < KEYWORD_SIZE);
+
+    restore_record(table, s->default_values);
+    table->field[0]->set_notnull();
+    table->field[0]->store(name, strlen(name),
+                           system_charset_info);
+    if (schema_table_store_record(table->in_use, table))
+      DBUG_RETURN(1);
+  }
+
+  DBUG_RETURN(0);
+}
+
 
 int fill_status(THD *thd, TABLE_LIST *tables, COND *cond)
 {
@@ -9011,6 +9042,12 @@ ST_FIELD_INFO enabled_roles_fields_info[]=
   CEnd()
 };
 
+ST_FIELD_INFO keywords_field_info[]=
+{
+  Column("WORD", Varchar(KEYWORD_SIZE), NULLABLE),
+  CEnd()
+};
+
 
 ST_FIELD_INFO engines_fields_info[]=
 {
@@ -9624,6 +9661,8 @@ ST_SCHEMA_TABLE schema_tables[]=
    fill_status, make_old_format, 0, 0, -1, 0, 0},
   {"SESSION_VARIABLES", Show::variables_fields_info, 0,
    fill_variables, make_old_format, 0, 0, -1, 0, 0},
+  {"KEYWORDS", Show::keywords_field_info, 0,
+   fill_i_s_keywords, 0, 0, -1, -1, 0, 0},
   {"STATISTICS", Show::stat_fields_info, 0,
    get_all_tables, make_old_format, get_schema_stat_record, 1, 2, 0,
    OPEN_TABLE_ONLY|OPTIMIZE_I_S_TABLE},
